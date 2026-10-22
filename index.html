@@ -1,0 +1,1404 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>한걸음 타운</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Jua&family=Gowun+Dodum&display=swap">
+<style>
+/* Layout: page header + intro, then one large walkable game frame (canvas world with HUD, dialog and touch controls), then design notes. */
+:root {
+  --bg: #EDF2F0;
+  --surface: #FFFFFF;
+  --soft: #E2EAE7;
+  --ink: #1E2D2A;
+  --muted: #586A65;
+  --line: #CFDAD6;
+  --accent: #2F7D70;
+  --accent-ink: #FFFFFF;
+  --ruby: #B8325E;
+  --gold: #C98A1E;
+  --display: 'Jua', 'Gowun Dodum', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
+  --body: 'Gowun Dodum', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #131B19; --surface: #1C2624; --soft: #24302D; --ink: #E5EEEB; --muted: #9EB0AB; --line: #2F3D3A;
+    --accent: #5FB3A3; --accent-ink: #0E1917; --ruby: #E26A92; --gold: #E2B04F; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #131B19; --surface: #1C2624; --soft: #24302D; --ink: #E5EEEB; --muted: #9EB0AB; --line: #2F3D3A;
+  --accent: #5FB3A3; --accent-ink: #0E1917; --ruby: #E26A92; --gold: #E2B04F; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { background: var(--bg); color: var(--ink); font-family: var(--body); font-size: 16px; line-height: 1.6; word-break: keep-all; overflow-wrap: anywhere; }
+.wrap { max-width: 1040px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 18px 48px; display: grid; gap: 22px; }
+h1, h2, h3 { font-family: var(--display); font-weight: 400; line-height: 1.3; margin: 0; text-wrap: balance; }
+p { margin: 0; }
+button { font: inherit; color: inherit; cursor: pointer; }
+button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+
+.top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 20px; }
+.brand { display: flex; align-items: center; gap: 10px; }
+.brand-mark { width: 40px; height: 40px; border-radius: 12px; background: var(--accent); color: var(--accent-ink); display: grid; place-items: center; }
+.brand-mark svg { width: 24px; height: 24px; }
+.brand b { font-family: var(--display); font-weight: 400; font-size: 1.35rem; display: block; line-height: 1.1; }
+.brand small { color: var(--muted); font-size: .8rem; }
+.controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.ruby-pill { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 999px; background: var(--surface); border: 1px solid var(--line); font-family: var(--display); font-size: 1.05rem; font-variant-numeric: tabular-nums; }
+.ruby-pill svg { width: 18px; height: 18px; color: var(--ruby); }
+.toggle { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); font-size: .88rem; }
+.toggle i { width: 30px; height: 18px; border-radius: 9px; background: var(--line); position: relative; flex: none; }
+.toggle i::after { content: ""; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: var(--surface); transition: transform .2s; }
+.toggle[aria-pressed="true"] i { background: var(--accent); }
+.toggle[aria-pressed="true"] i::after { transform: translateX(12px); }
+
+.intro { display: grid; gap: 8px; }
+.eyebrow { font-size: .82rem; letter-spacing: .04em; color: var(--accent); font-weight: 700; }
+.intro h1 { font-size: clamp(1.6rem, 4vw, 2.3rem); }
+.intro p { color: var(--muted); max-width: 64ch; }
+.award { display: inline-flex; gap: 8px; align-items: center; justify-self: start; padding: 5px 12px; border-radius: 8px; background: var(--soft); font-size: .86rem; }
+.award svg { width: 16px; height: 16px; color: var(--gold); flex: none; }
+
+/* ---------- game frame (one fixed daytime world, same in both themes) ---------- */
+.game { position: relative; border-radius: 18px; overflow: hidden; border: 1px solid var(--line); background: #2E3538; height: min(74vh, 620px); min-height: 440px; touch-action: none; user-select: none; -webkit-user-select: none; }
+.game canvas { display: block; width: 100%; height: 100%; }
+body.calm .game canvas { filter: saturate(.6) brightness(1.02); }
+.hud { position: absolute; top: 10px; left: 10px; width: min(330px, calc(100% - 20px)); background: rgba(255, 255, 255, .95); color: #1E2D2A; border-radius: 14px; padding: 10px 12px; box-shadow: 0 4px 18px rgba(0, 0, 0, .18); display: grid; gap: 6px; font-size: .88rem; line-height: 1.45; }
+.hud-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.hud h3 { font-size: 1.05rem; }
+.hud .fold { border: 0; background: #E9EEEC; color: #1E2D2A; border-radius: 8px; padding: 2px 8px; font-size: .78rem; flex: none; }
+.hud.min .hud-body { display: none; }
+.hud-body { display: grid; gap: 6px; }
+.hud-steps { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px; }
+.hud-steps li { padding: 2px 9px 2px 4px; border-radius: 999px; background: #E9EEEC; color: #586A65; font-size: .76rem; display: inline-flex; gap: 4px; align-items: center; }
+.hud-steps li b { width: 17px; height: 17px; border-radius: 50%; background: #fff; display: grid; place-items: center; font-size: .7rem; }
+.hud-steps li.now { background: #2F7D70; color: #fff; }
+.hud-steps li.now b { color: #1E2D2A; }
+.hud-steps li.done { color: #1E2D2A; }
+.hud-steps li.done b { background: #2F7D58; color: #fff; }
+.hud-list { margin: 0; padding-left: 16px; color: #3C4C48; font-size: .82rem; }
+.hud-cap { font-size: .72rem; color: #586A65; letter-spacing: .04em; }
+
+.toast { position: absolute; left: 50%; bottom: 150px; transform: translateX(-50%); max-width: calc(100% - 32px); background: rgba(30, 45, 42, .92); color: #fff; padding: 8px 16px; border-radius: 999px; font-size: .9rem; text-align: center; pointer-events: none; transition: opacity .3s; }
+.toast.hide { opacity: 0; }
+.announce { position: absolute; top: 10px; right: 10px; max-width: 46%; background: #22262C; color: #FFD860; font-family: var(--display); padding: 8px 12px; border-radius: 10px; font-size: .95rem; pointer-events: none; }
+
+.pad { position: absolute; left: 12px; bottom: 12px; display: grid; grid-template-columns: repeat(3, 46px); grid-template-rows: repeat(3, 46px); gap: 3px; }
+.pad button { border: 0; border-radius: 12px; background: rgba(255, 255, 255, .78); color: #1E2D2A; font-size: 1.1rem; box-shadow: 0 2px 6px rgba(0, 0, 0, .15); touch-action: none; }
+.pad button:active { background: #fff; }
+.pad .u { grid-column: 2; grid-row: 1; } .pad .l { grid-column: 1; grid-row: 2; } .pad .r { grid-column: 3; grid-row: 2; } .pad .d { grid-column: 2; grid-row: 3; }
+.act { position: absolute; right: 14px; bottom: 18px; width: 76px; height: 76px; border-radius: 50%; border: 0; background: #2F7D70; color: #fff; font-family: var(--display); font-size: 1.05rem; box-shadow: 0 3px 10px rgba(0, 0, 0, .25); }
+.act.ready { background: #E0A43A; color: #1E2D2A; animation: nudge 1.2s ease-in-out infinite; }
+@keyframes nudge { 50% { transform: scale(1.07); } }
+.game.talking .pad, .game.talking .act, .game.talking .toast { display: none; }
+
+.dlg { position: absolute; left: 10px; right: 10px; bottom: 10px; background: #FFFDF8; color: #1E2D2A; border-radius: 16px; padding: 12px 14px; box-shadow: 0 6px 24px rgba(0, 0, 0, .3); display: grid; gap: 8px; border: 2px solid #1E2D2A; }
+.dlg-head { display: flex; align-items: center; gap: 8px; }
+.dlg-face { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; color: #fff; font-family: var(--display); flex: none; }
+.dlg-name { font-family: var(--display); font-size: 1.05rem; }
+.dlg-text { font-size: 1.02rem; white-space: pre-line; }
+.dlg-opts { display: flex; flex-wrap: wrap; gap: 8px; }
+.dopt { border: 2px solid #CFDAD6; background: #fff; color: #1E2D2A; border-radius: 12px; padding: 8px 14px; text-align: left; }
+.dopt:hover, .dopt:focus-visible { border-color: #2F7D70; }
+.dnext { margin-left: auto; border: 0; background: #2F7D70; color: #fff; border-radius: 10px; padding: 7px 16px; font-family: var(--display); }
+
+.modal { position: absolute; inset: 0; background: rgba(20, 28, 26, .55); display: grid; place-items: center; padding: 14px; }
+.mpanel { background: #FFFDF8; color: #1E2D2A; border-radius: 16px; padding: 16px; width: min(420px, 100%); max-height: 100%; overflow: auto; display: grid; gap: 10px; }
+.mpanel h3 { font-size: 1.25rem; }
+.mpanel .note { font-size: .88rem; color: #586A65; }
+.receipt { width: min(280px, 100%); background: #fff; border: 1px solid #CFDAD6; border-radius: 6px; padding: 12px 14px; font-size: .86rem; display: grid; gap: 3px; font-variant-numeric: tabular-nums; justify-self: center; }
+.receipt .r { display: flex; justify-content: space-between; }
+.cutline { border-top: 2px dashed #586A65; margin: 10px -14px 4px; position: relative; }
+.scissor { position: absolute; top: -14px; left: 0; width: 26px; height: 26px; color: #C25A52; transform: translateX(-50%); }
+.receipt.cut .tail { transform: translateY(12px) rotate(2deg); opacity: .4; transition: transform .5s, opacity .5s; }
+.cutrange { width: 100%; accent-color: #C25A52; }
+.closet { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.citem { border: 2px solid #CFDAD6; background: #fff; color: #1E2D2A; border-radius: 12px; padding: 10px; text-align: left; display: grid; gap: 2px; }
+.citem b { font-family: var(--display); font-weight: 400; }
+.citem small { color: #586A65; }
+.citem.on { border-color: #B8325E; }
+.mbtn { border: 0; background: #2F7D70; color: #fff; border-radius: 10px; padding: 9px 16px; font-family: var(--display); justify-self: end; }
+
+.start { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(20, 28, 26, .5); padding: 16px; }
+.start-card { background: #FFFDF8; color: #1E2D2A; border-radius: 18px; padding: 20px; width: min(440px, 100%); display: grid; gap: 10px; text-align: center; }
+.start-card h2 { font-size: 1.6rem; }
+.start-card p { color: #3C4C48; font-size: .95rem; }
+.start-card .keys { font-size: .82rem; color: #586A65; }
+.start-card button { border: 0; background: #2F7D70; color: #fff; border-radius: 12px; padding: 12px 20px; font-family: var(--display); font-size: 1.15rem; }
+
+.chips { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.chips span { font-size: .85rem; color: var(--muted); margin-right: 2px; }
+.chip { border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 5px 13px; font-size: .9rem; }
+.chip.done { border-color: var(--accent); color: var(--accent); }
+.howto { font-size: .84rem; color: var(--muted); }
+
+.notes h2 { font-size: 1.4rem; margin-bottom: 4px; }
+.notes > p { color: var(--muted); margin-bottom: 12px; }
+.map-rows { display: grid; border-top: 1px solid var(--line); margin: 0; }
+.map-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.7fr); gap: 16px; padding: 13px 0; border-bottom: 1px solid var(--line); }
+.map-row dt { font-family: var(--display); font-size: 1.05rem; }
+.map-row dt small { display: block; font-family: var(--body); color: var(--muted); font-size: .8rem; }
+.map-row dd { margin: 0; font-size: .95rem; }
+footer { font-size: .82rem; color: var(--muted); border-top: 1px solid var(--line); padding-top: 14px; display: grid; gap: 2px; }
+
+body.calm *, body.calm *::before, body.calm *::after { animation: none !important; }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+@media (max-width: 640px) {
+  .game { height: 78vh; min-height: 480px; }
+  .map-row { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+  .pad { grid-template-columns: repeat(3, 42px); grid-template-rows: repeat(3, 42px); }
+  .announce { max-width: 60%; top: auto; bottom: 168px; right: 10px; }
+}
+@media (hover: hover) and (pointer: fine) and (min-width: 900px) {
+  .pad { opacity: .75; }
+}
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div class="brand">
+      <div class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 19c2-1 3-3 4-6s2-6 5-7"/><circle cx="16" cy="5" r="1.6" fill="currentColor"/><path d="M13 19h6"/></svg></div>
+      <div><b>한걸음 타운</b><small>현실 반영 메타버스 · 웹 시연판</small></div>
+    </div>
+    <div class="controls">
+      <span class="ruby-pill" title="모은 루비"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h10l4 6-9 12L3 9z" fill="currentColor" opacity=".25"/><path d="M7 3h10l4 6-9 12L3 9zM3 9h18M9 3l3 6 3-6M12 9v12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg><span id="rubyCount">0</span></span>
+      <button class="toggle" id="calmBtn" aria-pressed="false" type="button"><i></i>차분 모드</button>
+    </div>
+  </header>
+
+  <section class="intro">
+    <p class="eyebrow">자폐 스펙트럼 장애 아동을 위한 현실 반영 메타버스</p>
+    <h1>우리 동네를 게임 속에서 먼저 걸어 봐요</h1>
+    <p>신호등이 있는 큰길, 학교, 마트, 지하철역, 병원과 약국이 있는 마을이에요. 캐릭터로 직접 돌아다니며 이웃에게 인사하고, 초록불에 길을 건너고, 건물 안에서 미션을 해 봐요. 게임 속에서 익숙해진 공간은 실제로 나갔을 때 덜 낯설게 느껴져요.</p>
+    <span class="award"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2l2.9 6 6.6.9-4.8 4.6 1.2 6.5L12 16.9 6.1 20l1.2-6.5L2.5 8.9 9.1 8z"/></svg>2022 융합연구 활성화 아이디어 공모전 장려상 아이디어</span>
+  </section>
+
+  <div class="game" id="game">
+    <canvas id="cv" aria-label="한걸음 타운 게임 화면"></canvas>
+    <div class="hud" id="hud">
+      <div class="hud-top"><h3 id="hudTitle">우리 동네</h3><button class="fold" id="hudFold" type="button">접기</button></div>
+      <div class="hud-body">
+        <p id="hudText"></p>
+        <p class="hud-cap" id="hudCap" hidden>오늘의 순서</p>
+        <ol class="hud-steps" id="hudSteps"></ol>
+        <ul class="hud-list" id="hudList"></ul>
+      </div>
+    </div>
+    <div class="announce" id="announce" hidden></div>
+    <div class="toast hide" id="toast"></div>
+    <div class="pad" id="pad">
+      <button class="u" data-d="0,-1" type="button" aria-label="위로">▲</button>
+      <button class="l" data-d="-1,0" type="button" aria-label="왼쪽으로">◀</button>
+      <button class="r" data-d="1,0" type="button" aria-label="오른쪽으로">▶</button>
+      <button class="d" data-d="0,1" type="button" aria-label="아래로">▼</button>
+    </div>
+    <button class="act" id="actBtn" type="button">말하기</button>
+    <div class="dlg" id="dlg" hidden>
+      <div class="dlg-head"><span class="dlg-face" id="dlgFace"></span><span class="dlg-name" id="dlgName"></span></div>
+      <p class="dlg-text" id="dlgText"></p>
+      <div class="dlg-opts" id="dlgOpts"></div>
+    </div>
+    <div class="modal" id="modal" hidden></div>
+    <div class="start" id="start">
+      <div class="start-card">
+        <h2>한걸음 타운</h2>
+        <p>실제 동네처럼 꾸민 마을을 걸어 다니며 학교, 마트, 지하철, 병원을 미리 경험해 봐요.</p>
+        <p class="keys">가고 싶은 곳을 누르면 걸어가요 · 방향키나 WASD로도 움직여요<br>사람이나 물건 옆에서 <b>말하기</b>(스페이스 키)를 누르면 대화해요</p>
+        <button id="startBtn" type="button">마을로 나가기</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="chips" id="chips"></div>
+  <p class="howto">빨간불에서는 캐릭터가 스스로 멈춰서 초록불을 기다려요. 아래 버튼을 누르면 그 장소까지 자동으로 걸어가요.</p>
+
+  <section class="notes">
+    <h2>아이들의 특성을 이렇게 반영했어요</h2>
+    <p>발표에서 정리한 자폐 스펙트럼 장애의 특징을 마을과 미션 설계에 하나씩 옮겼습니다.</p>
+    <dl class="map-rows">
+      <div class="map-row"><dt>낯선 공간에 대한 불안<small>처음 가는 장소를 힘들어함</small></dt><dd>횡단보도 신호, 개찰구, 방면 표지판, 스크린도어, 임산부 배려석, 병원 번호표와 전광판, 약국처럼 실제 동네에서 만나는 장면을 그대로 옮겼어요. 게임에서 미리 걸어 본 길은 실제로 나갔을 때 덜 낯설어요.</dd></div>
+      <div class="map-row"><dt>규칙을 몸으로 익히기<small>말보다 경험으로 배움</small></dt><dd>빨간불이면 캐릭터가 멈춰서 기다리고, 열차 문 앞에서는 내리는 사람이 다 내릴 때까지 탈 수 없어요. 분홍 자리에 앉으려 하면 비워 두자고 알려 줘요. 규칙을 설명으로 듣는 대신 직접 겪으며 익혀요.</dd></div>
+      <div class="map-row"><dt>사회적 의사소통의 어려움<small>먼저 말을 걸기 어려움</small></dt><dd>길에서 만난 이웃에게 인사하고, 강아지를 만지기 전에 물어보고, 역무원에게 길을 묻는 대화를 골라서 말해 봐요. 학교와 마트에서는 친구가 함께 따라다니며 팀으로 미션을 해요.</dd></div>
+      <div class="map-row"><dt>예측 가능한 흐름을 편안해함<small>반복적인 행동 양식</small></dt><dd>화면 왼쪽 위에 지금 할 일과 '오늘의 순서'가 늘 보여요. 다음에 무엇을 하는지 알 수 있어 불안을 줄여요.</dd></div>
+      <div class="map-row"><dt>일상적인 자극에 대한 예민성<small>소리, 움직임, 색에 민감함</small></dt><dd>효과음을 쓰지 않았어요. 차분 모드를 켜면 지나가는 차가 줄고 느려지며, 사람들이 덜 움직이고 색도 부드러워져요.</dd></div>
+      <div class="map-row"><dt>틀려도 괜찮은 구조<small>실패 경험의 부담 줄이기</small></dt><dd>잘못 고르면 점수를 깎는 대신 친구나 어른이 다시 생각해 보자고 알려 줘요. 미션과 인사를 해내면 루비를 받아 상점에서 아바타를 직접 골라 꾸며요.</dd></div>
+    </dl>
+  </section>
+
+  <footer>
+    <span>아이디어: HHG 팀 · (사)미래융합협의회 2022 융합연구 활성화 아이디어 공모전 장려상</span>
+    <span>웹 시연판: 공모전 발표 내용을 바탕으로 2026년에 직접 구현</span>
+  </footer>
+</div>
+
+<script>
+(function () {
+  'use strict';
+  const TS = 32;
+  const KEY = 'hangeoreum-town-v2';
+  const blank = { rubies: 0, cleared: {}, badges: {}, owned: [], worn: [], virus: [], calm: false, intro: false };
+  let S;
+  try { S = Object.assign({}, blank, JSON.parse(localStorage.getItem(KEY) || 'null') || {}); } catch (e) { S = Object.assign({}, blank); }
+  function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} }
+
+  const $ = id => document.getElementById(id);
+  const cv = $('cv'), ctx = cv.getContext('2d'), gameEl = $('game');
+  const DIRS = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+  const FONT_D = "'Jua', 'Gowun Dodum', sans-serif";
+  const FONT_B = "'Gowun Dodum', 'Apple SD Gothic Neo', sans-serif";
+
+  function josa(w, a, b) { const c = w.charCodeAt(w.length - 1); if (c < 0xAC00 || c > 0xD7A3) return w + a; return w + (((c - 0xAC00) % 28) ? a : b); }
+  const won = n => n.toLocaleString('ko-KR') + '원';
+  function grid(w, h, c) { return Array.from({ length: h }, () => Array(w).fill(c)); }
+  function fill(g, x, y, w, h, c) { for (let j = y; j < y + h; j++) for (let i = x; i < x + w; i++) g[j][i] = c; }
+  function border(g) { const h = g.length, w = g[0].length; fill(g, 0, 0, w, 1, 'W'); fill(g, 0, h - 1, w, 1, 'W'); fill(g, 0, 0, 1, h, 'W'); fill(g, w - 1, 0, 1, h, 'W'); }
+
+  /* ---------------- characters ---------------- */
+  const LOOK = {
+    player: { body: '#2F7D70', hair: '#3B2F2A' },
+    '민준': { body: '#3F6FB8', hair: '#2A2320' },
+    '서아': { body: '#E07A9A', hair: '#5A3A2A', long: true },
+    '선생님': { body: '#8A6FB0', hair: '#3B2F2A', long: true },
+    '이웃 아주머니': { body: '#D98E73', hair: '#6B4A3A', long: true },
+    '택배 기사님': { body: '#C9862A', hair: '#2A2320', cap: '#7A4E1E' },
+    '할아버지': { body: '#7A8B99', hair: '#D8D8D8' },
+    '경비 아저씨': { body: '#4B5B7A', hair: '#2A2320', cap: '#2C3A57' },
+    '점원': { body: '#5E9B45', hair: '#2A2320', cap: '#4E8638' },
+    '역무원': { body: '#3A4F7A', hair: '#2A2320', cap: '#2B3B5E' },
+    '간호사': { body: '#F4F4F4', hair: '#2A2320', long: true },
+    '의사 선생님': { body: '#FFFFFF', hair: '#55504C' },
+    '약사': { body: '#FFFFFF', hair: '#3B2F2A', long: true },
+    '할머니': { body: '#9C6B8E', hair: '#E0E0E0' },
+    '상점 주인': { body: '#C94F7C', hair: '#2A2320' },
+    '승객': { body: '#6C7A89', hair: '#2A2320' },
+    '승객2': { body: '#B5835A', hair: '#4A3A30', long: true },
+    '승객3': { body: '#4F8C7A', hair: '#2A2320' }
+  };
+  const FACE = { '민준': '#3F6FB8', '서아': '#E07A9A', '선생님': '#8A6FB0', '이웃 아주머니': '#D98E73', '택배 기사님': '#C9862A', '할아버지': '#7A8B99', '경비 아저씨': '#4B5B7A', '점원': '#5E9B45', '역무원': '#3A4F7A', '간호사': '#C25A52', '의사 선생님': '#2F7D70', '약사': '#4F8C3A', '할머니': '#9C6B8E', '상점 주인': '#C94F7C' };
+
+  function npc(name, x, y, o) { return Object.assign({ name, x, y, px: x * TS, py: y * TS, look: LOOK[name] || LOOK['승객'], wt: Math.random() * 2, dir: 'down' }, o || {}); }
+
+  /* ---------------- shared UI ---------------- */
+  let dialogOpen = false, busy = false, started = false;
+  function talk(name, text, choices) {
+    return new Promise(res => {
+      dialogOpen = true;
+      $('dlg').hidden = false; gameEl.classList.add('talking');
+      $('dlgName').textContent = name || '안내';
+      const f = $('dlgFace'); f.textContent = (name || '안내').charAt(0); f.style.background = FACE[name] || '#586A65';
+      $('dlgText').textContent = text;
+      const box = $('dlgOpts'); box.innerHTML = '';
+      const list = choices && choices.length ? choices : null;
+      (list || ['다음 ▸']).forEach((c, i) => {
+        const b = document.createElement('button'); b.type = 'button';
+        b.className = list ? 'dopt' : 'dnext'; b.textContent = c;
+        b.addEventListener('click', () => { $('dlg').hidden = true; gameEl.classList.remove('talking'); dialogOpen = false; res(i); });
+        box.appendChild(b);
+      });
+      setTimeout(() => { const b = box.querySelector('button'); if (b) b.focus({ preventScroll: true }); }, 30);
+    });
+  }
+  let toastT = null, lastToast = '', lastToastAt = 0;
+  function toast(msg, ms) {
+    const now = performance.now();
+    if (msg === lastToast && now - lastToastAt < 2600) return;
+    lastToast = msg; lastToastAt = now;
+    const t = $('toast'); t.textContent = msg; t.classList.remove('hide');
+    clearTimeout(toastT); toastT = setTimeout(() => t.classList.add('hide'), ms || 2600);
+  }
+  function announce(msg) { const a = $('announce'); if (!msg) { a.hidden = true; return; } a.hidden = false; a.textContent = msg; }
+  function goal(title, text, steps, cur, list) {
+    $('hudTitle').textContent = title; $('hudText').textContent = text;
+    $('hudCap').hidden = !steps;
+    $('hudSteps').innerHTML = (steps || []).map((s, i) => '<li class="' + (i < cur ? 'done' : i === cur ? 'now' : '') + '"><b>' + (i < cur ? '✓' : i + 1) + '</b>' + s + '</li>').join('');
+    $('hudList').innerHTML = (list || []).map(l => '<li>' + l + '</li>').join('');
+  }
+  function refresh() {
+    $('rubyCount').textContent = S.rubies;
+    $('calmBtn').setAttribute('aria-pressed', String(S.calm));
+    document.body.classList.toggle('calm', S.calm);
+    renderChips();
+  }
+  function badge(id, label) {
+    if (S.badges[id]) return;
+    S.badges[id] = true; S.rubies += 1; save(); refresh();
+    toast('[' + label + '] 배지를 받았어요! 루비 +1', 3200);
+  }
+  async function finish(id, text) {
+    S.cleared[id] = true; S.rubies += 3; save(); refresh();
+    await talk('미션 완료!', text + '\n루비 3개를 받았어요.');
+  }
+
+  /* ---------------- player ---------------- */
+  const P = { look: LOOK.player, x: 11, y: 5, px: 11 * TS, py: 5 * TS, moving: false, path: [], pending: null, dir: 'down', trail: [], prev: null };
+  let held = null;
+
+  /* ---------------- scenes ---------------- */
+  const SC = {};
+  let cur = 'town';
+  const scene = () => SC[cur];
+  const WALK = new Set(['g', 's', 'p', 'D', 'y', 'f', 'o', 'h', 'm', 'X', 'q', 'n', 'C']);
+  const COND = new Set(['c', 'G', 'P', 'E', 'R']);
+
+  function objAt(sc, x, y) { return sc.objects.find(o => x >= o.x && x < o.x + (o.w || 1) && y >= o.y && y < o.y + (o.h || 1)); }
+  function inb(sc, x, y) { return y >= 0 && y < sc.g.length && x >= 0 && x < sc.g[0].length; }
+  function passable(sc, x, y) {
+    if (!inb(sc, x, y)) return false;
+    const o = objAt(sc, x, y); if (o && o.solid !== false) return false;
+    const t = sc.g[y][x];
+    return WALK.has(t) || COND.has(t);
+  }
+  function canEnter(sc, x, y) {
+    if (!inb(sc, x, y)) return { ok: false };
+    const o = objAt(sc, x, y); if (o && o.solid !== false) return { ok: false };
+    const t = sc.g[y][x];
+    if (sc.check) { const r = sc.check(t, x, y); if (r) return r; }
+    if (t === 'r') return { ok: false, msg: '찻길로는 다닐 수 없어요. 횡단보도로 건너요.' };
+    return { ok: WALK.has(t) };
+  }
+
+  /* ===== TOWN ===== */
+  (function buildTown() {
+    const W = 30, H = 22, g = grid(W, H, 'g');
+    fill(g, 0, 0, W, 1, 'T'); fill(g, 0, H - 1, W, 1, 'T');
+    for (let y = 0; y < H; y++) if (y < 9 || y > 12) { g[y][0] = 'T'; g[y][W - 1] = 'T'; }
+    fill(g, 0, 9, W, 1, 's'); fill(g, 0, 12, W, 1, 's'); fill(g, 0, 10, W, 2, 'r');
+    fill(g, 6, 10, 2, 2, 'c'); fill(g, 22, 10, 2, 2, 'c');
+    fill(g, 14, 1, 2, 8, 'p'); fill(g, 14, 13, 2, 8, 'p');
+    fill(g, 1, 5, 8, 3, 'y'); fill(g, 1, 8, 12, 1, 'f');
+    const B = [];
+    function bld(id, name, x, y, w, h, color, door, top) { fill(g, x, y, w, h, 'B'); g[door[1]][door[0]] = 'D'; B.push({ id, name, x, y, w, h, color, door, top }); }
+    bld('school', '한걸음 초등학교', 1, 1, 8, 4, '#E7B54C', [4, 4], false);
+    bld('home', '우리 집', 10, 2, 3, 3, '#D98E73', [11, 4], false);
+    bld('mart', '한걸음 마트', 17, 2, 7, 3, '#6FAE57', [20, 4], false);
+    bld('shop', '루비 상점', 25, 2, 4, 3, '#C94F7C', [26, 4], false);
+    bld('hospital', '한걸음 의원', 1, 14, 6, 4, '#E9E4DB', [3, 14], true);
+    bld('pharmacy', '약국', 8, 14, 4, 3, '#7BBFA8', [9, 14], true);
+    bld('station', '여의도역', 17, 14, 5, 3, '#8A5FA8', [19, 14], true);
+    g[13][3] = 'p'; g[13][9] = 'p'; g[13][19] = 'p';
+    fill(g, 23, 14, 6, 6, 'f'); fill(g, 25, 18, 3, 2, 'w'); g[16][25] = 'b'; g[16][26] = 'b';
+    [[28, 14], [23, 19], [28, 19], [9, 6], [12, 7], [2, 19], [6, 19], [10, 19], [17, 19], [20, 19], [19, 6], [24, 6], [27, 7], [12, 15], [5, 1], [27, 1]].forEach(([x, y]) => { if (g[y][x] !== 'B') g[y][x] = 'T'; });
+
+    const t = {
+      id: 'town', g, B, bg: '#5E8F4C', objects: [], cars: [], spawn: [1, 3], light: 0,
+      npcs: [
+        npc('이웃 아주머니', 4, 13, { wander: [0, 12, 13, 13], talk: talkNeighbor }),
+        npc('택배 기사님', 20, 9, { wander: [16, 9, 29, 9], talk: talkCourier }),
+        npc('할아버지', 24, 15, { wander: [23, 14, 28, 17], dog: true, talk: talkGrandpa }),
+        npc('경비 아저씨', 9, 7, { talk: async () => { await talk('경비 아저씨', '학교에 왔구나! 운동장에서는 뛰어도 괜찮지만, 학교 안 복도에서는 천천히 걸어야 해.'); } }),
+        npc('민준', 6, 6, { talk: async () => { await talk('민준', S.cleared.school ? '보물찾기 진짜 재밌었다! 다음에 또 같이 하자.' : '안녕! 학교에서 같이 보물찾기 하자. 학교 문으로 들어와!'); } }),
+        npc('서아', 21, 6, { talk: async () => { await talk('서아', S.cleared.mart ? '우리가 만든 카레 정말 맛있었지?' : '안녕! 마트에서 카레 재료 같이 사자. 마트 문으로 들어가면 돼!'); } })
+      ],
+      doors: [
+        { x: 4, y: 4, go: () => setScene('school', 1, 7) },
+        { x: 11, y: 4, go: () => run(async () => { await homeTalk(); place(11, 5); }) },
+        { x: 20, y: 4, go: () => setScene('mart', 10, 11) },
+        { x: 26, y: 4, go: () => setScene('shop', 6, 6) },
+        { x: 3, y: 14, go: () => setScene('hospital', 9, 10) },
+        { x: 9, y: 14, go: () => setScene('pharmacy', 6, 6) },
+        { x: 19, y: 14, go: () => setScene('station', 10, 1) }
+      ],
+      enter() { townGoal(); announce(''); },
+      check(tile, x, y) {
+        if (tile === 'c') {
+          const onCw = scene().g[P.y][P.x] === 'c';
+          if (pedGreen() || onCw) return { ok: true };
+          return { ok: false, wait: true, msg: '빨간불이에요. 초록불이 켜질 때까지 멈춰서 기다려요.' };
+        }
+        return null;
+      },
+      onStep(x, y, tile) { if (tile === 'c' && pedGreen()) badge('cross', '초록불에 길 건너기'); },
+      update: updateTown
+    };
+    SC.town = t;
+  })();
+
+  function lightPhase() { return SC.town.light % 16; }
+  function pedGreen() { return lightPhase() >= 9; }
+  function carsStop() { return lightPhase() >= 8; }
+  function townGoal() {
+    const left = ['school', 'mart', 'subway', 'hospital'].filter(k => !S.cleared[k]);
+    const names = { school: '학교', mart: '마트', subway: '지하철', hospital: '병원·약국' };
+    goal('우리 동네', left.length ? '가 보고 싶은 곳으로 걸어가요. 길에서 만난 이웃에게 말을 걸어 인사해 보세요.' : '모든 곳을 다녀왔어요! 공원을 산책하거나 루비 상점에서 꾸며 보세요.', null, 0,
+      [left.length ? '남은 미션: ' + left.map(k => names[k]).join(', ') : '미션 4개 완료', '큰길은 횡단보도에서 초록불일 때 건너요']);
+  }
+  async function homeTalk() {
+    const done = ['school', 'mart', 'subway', 'hospital'].filter(k => S.cleared[k]).length;
+    await talk('우리 집', done ? '집에 돌아왔어요. 오늘 다녀온 미션: ' + done + '개. 잘했어요!\n다시 밖으로 나가 볼까요?' : '여기는 우리 집이에요. 동네를 한 바퀴 돌아보고 와요!');
+  }
+  async function talkNeighbor() {
+    const i = await talk('이웃 아주머니', '어머, 안녕! 어디 가니?', ['안녕하세요! 마트에 가요', '안녕하세요! 학교에 가요', '(그냥 지나가요)']);
+    if (i === 2) { await talk('안내', '아는 이웃을 만나면 "안녕하세요" 하고 인사하면 좋아요. 다시 말을 걸어 볼까요?'); return; }
+    await talk('이웃 아주머니', '그래, 인사도 잘하네! 조심히 다녀오렴. 길 건널 때는 꼭 초록불에 건너고.');
+    badge('greet', '먼저 인사하기');
+  }
+  async function talkCourier() {
+    const i = await talk('택배 기사님', '안녕! 혹시 이 근처에 마트가 어디 있는지 아니?', ['큰길 위쪽, 초록색 건물이에요', '잘 모르겠어요']);
+    await talk('택배 기사님', i === 0 ? '아, 저기구나! 알려 줘서 고마워.' : '괜찮아, 다른 분께 여쭤볼게. 고마워!');
+    if (i === 0) badge('help', '길 알려 주기');
+  }
+  async function talkGrandpa() {
+    const i = await talk('할아버지', '허허, 강아지랑 산책 중이란다.', ['강아지 만져도 돼요?', '(바로 만져요)', '안녕하세요!']);
+    if (i === 1) { await talk('할아버지', '앗, 강아지가 깜짝 놀랐구나. 다른 사람의 강아지는 먼저 "만져도 돼요?" 하고 물어보는 거란다.'); return; }
+    if (i === 2) { await talk('할아버지', '그래, 안녕! 인사를 참 잘하는구나.'); badge('greet', '먼저 인사하기'); return; }
+    await talk('할아버지', '물어봐 줘서 고맙구나. 그럼, 머리를 살살 쓰다듬어 주렴.');
+    badge('ask', '먼저 물어보기');
+  }
+
+  function crossOccupied(cw) { return cur === 'town' && P.y >= 10 && P.y <= 11 && P.x >= cw && P.x <= cw + 1; }
+  function updateTown(dt) {
+    const t = SC.town; t.light += dt;
+    t.spawnT = t.spawnT || [0.5, 1.6];
+    const W = t.g[0].length;
+    for (let lane = 0; lane < 2; lane++) {
+      t.spawnT[lane] -= dt;
+      if (t.spawnT[lane] <= 0) {
+        t.spawnT[lane] = (S.calm ? 7 : 3) + Math.random() * 2.5;
+        const sx = lane === 0 ? -2 : W + 0.4;
+        if (!t.cars.some(c => c.lane === lane && Math.abs(c.x - sx) < 3)) t.cars.push({ lane, x: sx, len: 1.6, color: ['#E4572E', '#3B7DD8', '#F2C14E', '#F1F1F1', '#5B5F97', '#2F9C7C'][Math.floor(Math.random() * 6)] });
+      }
+    }
+    const stopAll = carsStop();
+    for (const c of t.cars) {
+      const v = (S.calm ? 2.2 : 3.6) * dt;
+      if (c.lane === 0) {
+        let maxFront = Infinity; const front = c.x + c.len;
+        for (const cw of [6, 22]) { const line = cw - 0.25; if ((stopAll || crossOccupied(cw)) && front <= line + 0.01) maxFront = Math.min(maxFront, line); }
+        const ahead = t.cars.filter(o => o.lane === 0 && o.x > c.x).sort((a, b) => a.x - b.x)[0];
+        if (ahead) maxFront = Math.min(maxFront, ahead.x - 0.45);
+        c.x = Math.max(c.x, Math.min(c.x + v, maxFront - c.len));
+      } else {
+        let minFront = -Infinity; const front = c.x;
+        for (const cw of [6, 22]) { const line = cw + 2 + 0.25; if ((stopAll || crossOccupied(cw)) && front >= line - 0.01) minFront = Math.max(minFront, line); }
+        const ahead = t.cars.filter(o => o.lane === 1 && o.x < c.x).sort((a, b) => b.x - a.x)[0];
+        if (ahead) minFront = Math.max(minFront, ahead.x + ahead.len + 0.45);
+        c.x = Math.min(c.x, Math.max(c.x - v, minFront));
+      }
+    }
+    t.cars = t.cars.filter(c => c.x > -4 && c.x < W + 3);
+  }
+
+  /* ===== SCHOOL ===== */
+  (function () {
+    const W = 22, H = 14, g = grid(W, H, 'o'); border(g);
+    fill(g, 7, 1, 1, 4, 'W'); fill(g, 14, 1, 1, 4, 'W'); fill(g, 7, 10, 1, 3, 'W'); fill(g, 14, 10, 1, 3, 'W');
+    fill(g, 0, 5, W, 1, 'W'); fill(g, 0, 9, W, 1, 'W');
+    [3, 10, 17].forEach(x => { g[5][x] = 'o'; g[9][x] = 'o'; });
+    fill(g, 1, 6, 20, 3, 'h'); g[7][0] = 'X';
+    const QUIZ = [
+      { q: '복도에서는 어떻게 다녀요?', o: ['천천히 걸어요', '뛰어서 빨리 가요'], a: 0, who: '민준', hint: '출석부가 있는 곳에는 책이 아주 많아!' },
+      { q: '수업 중에 화장실에 가고 싶으면 어떻게 해요?', o: ['그냥 조용히 나가요', '손을 들고 선생님께 말해요'], a: 1, who: '서아', hint: '그곳에서는 작은 목소리로 말해야 해.' },
+      { q: '친구 지우개를 쓰고 싶어요.', o: ['"빌려줄래?" 하고 물어봐요', '말없이 가져가요'], a: 0, who: '민준', hint: '선생님이 아침에 책을 반납하러 가셨대!' }
+    ];
+    const F = (x, y, kind, label, o) => Object.assign({ x, y, kind, label, use: searchUse }, o || {});
+    const objects = [
+      F(1, 2, 'desk', '책상'), F(2, 2, 'desk', '책상'), F(4, 2, 'desk', '책상'), F(5, 2, 'desk', '책상'),
+      F(1, 3, 'desk', '책상'), F(2, 3, 'desk', '책상'), F(4, 3, 'desk', '책상'), F(5, 3, 'desk', '책상'),
+      F(8, 1, 'piano', '피아노', { w: 2 }), F(12, 2, 'drum', '북'), F(9, 3, 'xylo', '실로폰'),
+      F(15, 1, 'book', '책장'), F(16, 1, 'book', '책장'), F(18, 1, 'book', '책장'), F(19, 1, 'book', '책장'), F(20, 1, 'book', '책장'),
+      F(15, 3, 'book', '책장'), F(16, 3, 'book', '책장'), F(19, 3, 'book', '반납 책장', { target: true, sign: '반납' }),
+      F(1, 11, 'bed', '침대', { w: 2 }), F(6, 10, 'cabinet', '약 상자'),
+      F(8, 11, 'desk', '선생님 책상'), F(9, 11, 'desk', '선생님 책상'), F(11, 11, 'desk', '선생님 책상'), F(12, 11, 'desk', '선생님 책상'),
+      F(15, 11, 'table', '식탁'), F(16, 11, 'table', '식탁'), F(18, 11, 'table', '식탁'), F(19, 11, 'table', '식탁'),
+      { x: 5, y: 5, kind: 'poster', qi: 0, use: posterUse }, { x: 12, y: 5, kind: 'poster', qi: 1, use: posterUse }, { x: 19, y: 5, kind: 'poster', qi: 2, use: posterUse }
+    ];
+    const m0 = () => ({ hints: [], found: false, done: false, intro: false });
+    let M = m0();
+    function sGoal() {
+      const c = M.done ? 3 : M.found ? 2 : M.hints.length < 3 ? 0 : 1;
+      goal('학교 · 단체전 보물찾기', M.done ? '출석부를 찾아 드렸어요! 왼쪽 출구로 나가 동네로 돌아가요.' : M.found ? '찾은 출석부를 복도에 계신 선생님께 가져다 드려요.' : '복도 벽의 노란 게시판에서 규칙 퀴즈를 풀어 힌트를 모으고(' + M.hints.length + '/3), 교실을 돌아다니며 출석부를 찾아요.',
+        ['힌트 모으기', '교실 찾아다니기', '선생님께 드리기'], c, M.hints.map(h => '힌트: ' + h));
+      SC.school.marker = M.found && !M.done ? [2, 7] : null;
+    }
+    async function posterUse(o) {
+      const Q = QUIZ[o.qi];
+      if (M.hints.includes(Q.hint)) { await talk('규칙 게시판', '이미 푼 퀴즈예요.\n힌트: ' + Q.hint); return; }
+      for (;;) {
+        const i = await talk('규칙 게시판', Q.q, Q.o);
+        if (i === Q.a) break;
+        await talk(Q.who === '민준' ? '서아' : '민준', '음… 다른 친구들도 편안하려면 어떻게 하면 좋을까? 다시 골라 보자.');
+      }
+      M.hints.push(Q.hint);
+      await talk(Q.who, '정답! 힌트는 이거야.\n"' + Q.hint + '"');
+      if (M.hints.length === 3) await talk('서아', '힌트를 다 모았어! 책이 많고 조용한 곳으로 가 보자.');
+      sGoal();
+    }
+    async function searchUse(o) {
+      if (M.done || M.found) { await talk('안내', M.done ? '출석부는 이미 찾아 드렸어요.' : '출석부는 이미 찾았어요. 복도의 선생님께 가져다 드려요.'); return; }
+      if (o.target) {
+        M.found = true;
+        await talk('안내', '반납 책장 맨 아래 칸을 살펴봤더니… 출석부가 있어요!');
+        await talk('민준', '찾았다! 우리가 같이 찾았어! 선생님께 가져다 드리자.');
+        sGoal(); return;
+      }
+      await talk('안내', josa(o.label, '을', '를') + ' 살펴봤어요. 여기엔 없어요.');
+      if (M.hints.length) await talk('서아', '힌트를 다시 떠올려 보자. "' + M.hints[M.hints.length - 1] + '"');
+      else await talk('민준', '복도 게시판에서 힌트를 먼저 모으면 더 빨리 찾을 수 있을 거야.');
+    }
+    SC.school = {
+      id: 'school', g, bg: '#3A4448', objects,
+      labels: [[4, 1, '1학년 1반'], [11, 1, '음악실'], [18, 1, '도서관'], [4, 10, '보건실'], [11, 10, '교무실'], [18, 10, '급식실']],
+      npcs: [
+        npc('선생님', 2, 7, { talk: async () => {
+          if (M.done) { await talk('선생님', '덕분에 출석부를 찾았어요. 또 놀러 와요!'); return; }
+          if (M.found) { M.done = true; await talk('선생님', '출석부를 찾아 왔군요! 셋이 힘을 합쳐서 해냈네요. 정말 고마워요.'); await finish('school', '친구들과 힌트를 모아 도서관에서 출석부를 찾았어요. 학교 규칙과 교실 위치도 익혔어요.'); sGoal(); return; }
+          await talk('선생님', '복도 벽의 노란 게시판에서 규칙 퀴즈를 풀면 힌트를 얻을 수 있어요. 복도에서는 천천히 걸어요!');
+        } }),
+        npc('민준', 1, 7, { follow: 0, talk: async () => { await talk('민준', M.hints.length ? '힌트: ' + M.hints.join(' / ') : '게시판 퀴즈부터 풀어 보자!'); } }),
+        npc('서아', 1, 7, { follow: 1, talk: async () => { await talk('서아', '우리 셋이 함께니까 금방 찾을 거야!'); } })
+      ],
+      doors: [{ x: 0, y: 7, go: () => setScene('town', 4, 5) }],
+      async enter() {
+        if (M.done) M = m0();
+        sGoal(); announce('');
+        if (!M.intro) {
+          M.intro = true;
+          await talk('선생님', '어서 와요! 그런데 큰일이 났어요. 선생님 출석부가 사라졌어요.');
+          await talk('민준', '우리 셋이 같이 찾자! 복도 벽 노란 게시판의 규칙 퀴즈를 풀면 힌트가 나온대.');
+          await talk('서아', '교실을 하나씩 직접 돌아다니면서 찾아보자. 내가 따라갈게!');
+        }
+      }
+    };
+  })();
+
+  /* ===== MART ===== */
+  (function () {
+    const W = 20, H = 13, g = grid(W, H, 'm'); border(g); g[H - 1][10] = 'X';
+    const SECT = {
+      '채소': [['감자', 1500], ['당근', 1200], ['양파', 1800], ['브로콜리', 2500], ['오이', 900]],
+      '가공식품': [['카레가루', 3300], ['라면', 1100], ['케첩', 2800]],
+      '과자': [['감자칩', 1600], ['초콜릿', 1200]],
+      '음료·유제품': [['우유', 2700], ['주스', 2200]]
+    };
+    const PRICE = {}; Object.values(SECT).forEach(a => a.forEach(([n, p]) => { PRICE[n] = p; }));
+    const NEED = ['감자', '당근', '양파', '카레가루'];
+    const m0 = () => ({ chat: false, cart: [], done: false });
+    let M = m0();
+    function mGoal() {
+      const c = M.done ? 4 : !M.chat ? 0 : NEED.some(n => !M.cart.includes(n)) ? 1 : 2;
+      goal('마트 · 단체전 요리 완성', M.done ? '카레라이스 완성! 아래 출구로 나가요.' : '코너 진열대 앞에서 말하기를 눌러 재료를 담고, 다 담으면 계산대로 가요.',
+        ['팀 채팅', '재료 담기', '계산하기', '요리 완성'], c,
+        NEED.map(n => (M.cart.includes(n) ? '✓ ' : '□ ') + n).concat(M.cart.filter(n => !NEED.includes(n)).map(n => '✕ ' + n + ' (필요 없어요)')));
+      SC.mart.marker = c === 2 ? [14, 9] : null;
+    }
+    async function shelfUse(o) {
+      if (M.done) { await talk('안내', '장보기는 끝났어요.'); return; }
+      const items = SECT[o.sec];
+      for (;;) {
+        const opts = items.map(([n, p]) => (M.cart.includes(n) ? '✓ ' : '') + n + ' · ' + won(p)).concat(['그만 볼래요']);
+        const i = await talk(o.sec + ' 코너', '무엇을 담을까요? 담은 것을 한 번 더 누르면 빠져요.', opts);
+        if (i === items.length) break;
+        const n = items[i][0];
+        if (M.cart.includes(n)) M.cart = M.cart.filter(x => x !== n);
+        else { M.cart.push(n); if (!NEED.includes(n)) await talk('서아', josa(n, '은', '는') + ' 카레에는 안 들어가. 다시 눌러서 빼 볼까?'); }
+        mGoal();
+      }
+      if (NEED.every(n => M.cart.includes(n))) await talk('서아', '재료를 다 담았어! 이제 입구 쪽 계산대로 가자.');
+    }
+    async function counterUse() {
+      if (M.done) { await talk('점원', '감사합니다. 또 오세요!'); return; }
+      const miss = NEED.filter(n => !M.cart.includes(n)), extra = M.cart.filter(n => !NEED.includes(n));
+      if (miss.length) { await talk('서아', '잠깐! 아직 ' + miss.join(', ') + josa(miss[miss.length - 1], '이', '가').slice(-1) + ' 없어. 목록을 다시 보자.'); return; }
+      if (extra.length) { await talk('서아', extra.join(', ') + josa(extra[extra.length - 1], '은', '는').slice(-1) + ' 필요 없으니까 진열대에 다시 두고 오자.'); return; }
+      const total = M.cart.reduce((s, n) => s + PRICE[n], 0);
+      await talk('점원', '어서 오세요. 봉투 필요하세요?', ['네, 하나 주세요', '아니요, 괜찮아요']);
+      await talk('점원', '모두 ' + won(total) + '입니다.', ['카드 내기']);
+      await talk('점원', '결제되었습니다. 안녕히 가세요!', ['감사합니다!', '안녕히 계세요!']);
+      await talk('서아', '재료를 다 샀다! 이제 같이 요리하자.');
+      await talk('안내', '보글보글… 서아와 함께 카레라이스를 완성했어요!');
+      M.done = true; mGoal();
+      await finish('mart', '서아와 대화하며 재료를 고르고, 코너를 돌며 장을 보고, 계산대에서 인사까지 했어요.');
+    }
+    SC.mart = {
+      id: 'mart', g, bg: '#3A4448',
+      objects: [
+        { x: 2, y: 2, w: 5, kind: 'shelf', sec: '채소', color: '#6FAE57', sign: '채소', use: shelfUse },
+        { x: 9, y: 2, w: 5, kind: 'shelf', sec: '가공식품', color: '#E7B54C', sign: '가공식품', use: shelfUse },
+        { x: 2, y: 6, w: 5, kind: 'shelf', sec: '과자', color: '#E07A5F', sign: '과자', use: shelfUse },
+        { x: 18, y: 2, h: 5, kind: 'fridge', sec: '음료·유제품', sign: '음료·유제품', use: shelfUse },
+        { x: 13, y: 9, w: 3, kind: 'counter', sign: '계산대', use: counterUse },
+        { x: 3, y: 10, kind: 'cart' }, { x: 4, y: 10, kind: 'cart' }
+      ],
+      npcs: [
+        npc('점원', 14, 8, { talk: async () => { await talk('점원', '어서 오세요! 계산은 이쪽 계산대에서 도와드릴게요.'); } }),
+        npc('서아', 10, 11, { follow: 0, talk: async () => { const miss = NEED.filter(n => !M.cart.includes(n)); await talk('서아', miss.length ? '아직 ' + miss.join(', ') + ' 남았어. 채소는 왼쪽 위, 카레가루는 가공식품 코너에 있어!' : '다 담았으면 계산대로 가자!'); } })
+      ],
+      doors: [{ x: 10, y: 12, go: () => setScene('town', 20, 5) }],
+      async enter() {
+        if (M.done) M = m0();
+        mGoal(); announce('');
+        if (!M.chat) {
+          await talk('서아', '우리 팀 미션은 카레라이스 만들기야! 재료를 사서 요리를 완성하면 돼.');
+          const i = await talk('서아', '카레에는 뭐가 들어갈까? (서아에게 보낼 말을 골라요)', ['감자랑 당근, 양파가 필요해!', '카레가루도 꼭 사야 해!', '잘 모르겠어. 같이 생각해 줄래?']);
+          await talk('서아', ['맞아! 그리고 카레가루도 잊지 말자.', '좋아! 채소는 감자, 당근, 양파가 필요해.', '물론이지! 감자, 당근, 양파, 그리고 카레가루가 필요해.'][i]);
+          const j = await talk('서아', '내가 옆에서 따라갈게. 네가 코너를 돌면서 재료를 골라 줄래?', ['응, 내가 골라 볼게!', '혼자는 떨려. 옆에서 도와줄래?']);
+          await talk('서아', ['고마워! 장보기 목록은 왼쪽 위에 적어 둘게.', '당연하지! 모르는 게 있으면 언제든 나한테 말 걸어 줘.'][j]);
+          M.chat = true; mGoal();
+        }
+      }
+    };
+  })();
+
+  /* ===== STATION ===== */
+  const TR = { L: { st: 'none', t: 0, x: -9 }, R: { st: 'none', t: 0, x: -9 } };
+  let ST = { gate: false };
+  (function () {
+    const W = 20, H = 14, g = grid(W, H, 'o'); border(g); g[0][10] = 'X';
+    fill(g, 1, 6, 18, 1, 'W'); [8, 9, 10, 11].forEach(x => { g[6][x] = 'G'; });
+    fill(g, 9, 8, 2, 3, 'W');
+    fill(g, 1, 11, 18, 1, 'S'); [3, 6, 13, 16].forEach(x => { g[11][x] = 'P'; });
+    fill(g, 1, 12, 18, 2, 't');
+    function sGoal() {
+      const onR = P.y >= 8 && P.x >= 11;
+      const c = !ST.gate ? 0 : !onR ? 1 : (TR.R.st === 'board' ? 3 : 2);
+      goal('지하철 · 개인전 길찾기', !ST.gate ? '공덕역에 가 보아요. 먼저 개찰구에 교통카드를 찍어요.' : !onR ? '표지판을 보고 공덕 방향(하남검단산·마천 방면) 승강장으로 가요. 헷갈리면 역무원에게 물어봐요.' : TR.R.st === 'board' ? '이제 타도 돼요! 열린 스크린도어로 들어가요.' : '노란 선 뒤에서 열차를 기다려요. 내리는 사람이 먼저 내려요.',
+        ['교통카드 찍기', '방향 고르기', '내리는 사람 먼저', '열차 타기'], c, ['목적지: 5호선 공덕역 (여의나루 → 마포 → 공덕)']);
+    }
+    SC.station = {
+      id: 'station', g, bg: '#3A4448', sGoal,
+      objects: [
+        { x: 8, y: 6, w: 4, kind: 'gatebar', solid: false, use: async () => {
+          if (ST.gate) { toast('개찰구가 열려 있어요. 지나가세요.'); return; }
+          await talk('개찰구', '교통카드를 개찰구에 대 볼까요?', ['교통카드 찍기']);
+          ST.gate = true; toast('삑! 개찰구가 열렸어요.'); sGoal();
+        } },
+        { x: 4, y: 0, w: 3, kind: 'linemap', use: async () => { await talk('5호선 노선도', '… 영등포구청 · 영등포시장 · 신길 · [여의도 · 지금 여기] · 여의나루 · 마포 · 공덕 · 애오개 …\n\n← 방화 방면                하남검단산 · 마천 방면 →\n\n공덕역은 여의나루, 마포 다음이에요.'); } },
+        { x: 16, y: 1, kind: 'plant' }
+      ],
+      npcs: [
+        npc('역무원', 14, 4, { talk: async () => {
+          const i = await talk('역무원', '안녕하세요. 무엇을 도와드릴까요?', ['공덕역에 가려면 어디서 타요?', '화장실은 어디예요?', '괜찮아요, 감사합니다']);
+          if (i === 0) await talk('역무원', '개찰구를 지나서 오른쪽 승강장, 하남검단산·마천 방면 열차를 타세요. 세 번째 역이 공덕역이에요.');
+          if (i === 1) await talk('역무원', '개찰구 들어가기 전, 왼쪽 끝에 있어요.');
+          if (i === 2) await talk('역무원', '네, 조심히 가세요!');
+          if (i < 2) badge('askhelp', '도움 요청하기');
+        } })
+      ],
+      doors: [{ x: 10, y: 0, go: () => setScene('town', 19, 13) }],
+      enter() {
+        ST = { gate: false }; TR.L = { st: 'none', t: 0, x: -9 }; TR.R = { st: 'none', t: 0, x: -9 };
+        SC.station.npcs = SC.station.npcs.filter(n => !n.temp);
+        sGoal(); announce(''); toast('여의도역에 들어왔어요. 공덕역까지 가 보아요!');
+      },
+      check(t, x, y) {
+        if (t === 'G') return ST.gate ? { ok: true } : { ok: false, msg: '개찰구에 교통카드를 먼저 찍어요. 개찰구 앞에서 말하기를 눌러요.' };
+        if (t === 'P') {
+          const side = x <= 8 ? 'L' : 'R', T = TR[side];
+          if (T.st === 'alight') return { ok: false, wait: true, msg: '내리는 사람이 먼저 내려요. 문 옆에서 잠깐 기다려요.' };
+          if (T.st !== 'board') return { ok: false, wait: T.st === 'wait' || T.st === 'arrive', msg: T.st === 'wait' || T.st === 'arrive' ? '열차가 들어오고 있어요. 노란 선 뒤에서 기다려요.' : '열차가 아직 오지 않았어요. 승강장에서 기다려요.' };
+          if (side === 'L') return { ok: false, msg: '이 열차는 신길 · 방화 방면이에요. 공덕역은 반대편 승강장에서 타요!' };
+          return { ok: true };
+        }
+        return null;
+      },
+      onStep(x, y, t) {
+        if (t === 'P' && x >= 11) { badge('wait', '내리는 사람 먼저'); run(async () => { setScene('train', x, 4); }); return; }
+        sGoal();
+      },
+      update(dt) {
+        if (dialogOpen) return;
+        for (const side of ['L', 'R']) {
+          const T = TR[side];
+          const on = P.y >= 7 && P.y <= 10 && (side === 'L' ? P.x <= 8 : P.x >= 11) && P.y >= 8;
+          if (T.st === 'none' && on) { T.st = 'wait'; T.t = 2.5; toast(side === 'L' ? '여기는 방화 방면 승강장이에요. 다음 역은 신길이에요.' : '하남검단산·마천 방면 승강장이에요. 곧 열차가 들어와요.'); }
+          else if (T.st === 'wait') { T.t -= dt; if (T.t <= 0) { T.st = 'arrive'; T.t = 0; announce(side === 'R' ? '하남검단산·마천행 열차가 들어오고 있습니다' : '방화행 열차가 들어오고 있습니다'); } }
+          else if (T.st === 'arrive') { T.t += dt; const k = Math.min(1, T.t / 2); T.x = -9 + 9 * (1 - Math.pow(1 - k, 3)); if (k >= 1) { T.st = 'alight'; T.t = 3; spawnAlighters(side); announce(''); } }
+          else if (T.st === 'alight') { T.t -= dt; if (T.t <= 0) { T.st = 'board'; T.t = 10; if (on) toast('내리는 사람이 다 내렸어요. 이제 타도 돼요.'); sGoal(); } }
+          else if (T.st === 'board') { T.t -= dt; if (T.t <= 0) { T.st = 'depart'; T.t = 0; toast('문이 닫힙니다. 다음 열차를 기다려요.'); } }
+          else if (T.st === 'depart') { T.t += dt; const k = Math.min(1, T.t / 2); T.x = 9 * k * k; if (k >= 1) { T.st = 'rest'; T.t = 4; T.x = -9; sGoal(); } }
+          else if (T.st === 'rest') { T.t -= dt; if (T.t <= 0) T.st = 'none'; }
+        }
+      }
+    };
+    function spawnAlighters(side) {
+      const xs = side === 'L' ? [3, 6] : [13, 16];
+      xs.forEach((x, i) => {
+        const n = npc(['승객', '승객2', '승객3'][(i + (side === 'L' ? 1 : 0)) % 3], x, 11, { temp: true, speed: 2.6 });
+        n.path = [[x, 10], [x, 9], [x, 8], [x, 7]];
+        n.onDone = () => { n.remove = true; };
+        SC.station.npcs.push(n);
+      });
+    }
+  })();
+
+  /* ===== TRAIN ===== */
+  (function () {
+    const W = 22, H = 7, g = grid(W, H, 'o'); border(g);
+    fill(g, 1, 1, 20, 1, 'q'); fill(g, 1, 5, 20, 1, 'q');
+    [4, 11, 18].forEach(x => { g[1][x] = 'o'; g[5][x] = 'o'; g[6][x] = 'E'; });
+    g[1][8] = 'k'; g[1][9] = 'k'; g[5][19] = 'n'; g[5][20] = 'n';
+    const STN = ['여의나루', '마포', '공덕'];
+    let M;
+    function tGoal() {
+      const name = STN[M.i];
+      goal('지하철 · 열차 안', M.phase === 'stop' ? name + '역에 섰어요. ' + (name === '공덕' ? '아래쪽 열린 문으로 내려요!' : '공덕역은 아직이에요.') : '다음 역은 ' + name + '역이에요. 자리에 앉거나 손잡이를 잡고 서 있어요.',
+        ['여의나루', '마포', '공덕에서 내리기'], M.i + (M.phase === 'stop' && name === '공덕' ? 0 : 0),
+        ['분홍색 자리는 임산부 배려석, 주황색 자리는 노약자석이에요']);
+    }
+    SC.train = {
+      id: 'train', g, bg: '#2E3538', objects: [],
+      npcs: [],
+      doors: [],
+      enter() {
+        M = { i: 0, t: 8, phase: 'run', doors: false, granny: null, asked: false, nextSaid: false };
+        SC.train.M = M;
+        SC.train.npcs = [npc('승객', 2, 1), npc('승객2', 14, 5), npc('승객3', 16, 1), npc('승객', 7, 3, { look: LOOK['택배 기사님'] })];
+        tGoal(); announce('이번 열차는 하남검단산·마천행입니다');
+        toast('열차에 탔어요. 공덕역까지 세 정거장이에요.');
+      },
+      check(t, x, y) {
+        if (t === 'k') return { ok: false, msg: '분홍색 자리는 임산부 배려석이에요. 필요한 분을 위해 비워 둬요.' };
+        if (t === 'E') {
+          if (!M.doors) return { ok: false, msg: '문이 닫혀 있어요. 역에 도착하면 열려요.' };
+          if (STN[M.i] !== '공덕') return { ok: false, msg: '아직 공덕역이 아니에요. ' + (2 - M.i) + '정거장 더 가야 해요.' };
+          return { ok: true };
+        }
+        return null;
+      },
+      onStep(x, y, t) {
+        if (t === 'E') run(async () => {
+          announce('');
+          await talk('안내 방송', '공덕, 공덕역입니다. 내리실 문은 오른쪽입니다.');
+          await finish('subway', '방면 표지판을 보고 알맞은 열차를 타고, 내리는 사람을 먼저 기다리고, 공덕역에서 잘 내렸어요.');
+          await talk('안내', '공덕역에 잘 도착했어요! 이제 우리 동네로 돌아갈게요.');
+          setScene('town', 19, 13);
+        });
+      },
+      update(dt) {
+        if (dialogOpen || busy) return;
+        M.t -= dt;
+        if (M.phase === 'run') {
+          if (!M.nextSaid && M.t <= 4) { M.nextSaid = true; announce('다음 역은 ' + STN[M.i] + '역입니다'); }
+          if (M.t <= 0) {
+            M.phase = 'stop'; M.doors = true; M.t = STN[M.i] === '공덕' ? 1e9 : 5;
+            announce('이번 역은 ' + STN[M.i] + '역입니다. 내리실 문은 오른쪽입니다');
+            if (STN[M.i] === '공덕') toast('공덕역이에요! 아래쪽 열린 문으로 내려요.', 4000);
+            if (STN[M.i] === '마포') boardGranny();
+            tGoal();
+          }
+        } else if (M.phase === 'stop' && M.t <= 0) {
+          M.phase = 'run'; M.doors = false; M.i++; M.t = 8; M.nextSaid = false; announce('문이 닫힙니다'); tGoal();
+        }
+        if (M.granny && M.granny.ready && !M.asked) {
+          const t = SC.train.g[P.y][P.x];
+          if (t === 'q' || t === 'n') { M.asked = true; run(yieldSeat); }
+          else if (!M.granny.seated) { M.asked = true; seatGranny(); }
+        }
+      }
+    };
+    function freeSeat(nearX) {
+      const sc = SC.train; let best = null;
+      for (const y of [1, 5]) for (let x = 1; x < 21; x++) {
+        const t = sc.g[y][x]; if (t !== 'q' && t !== 'n') continue;
+        if (sc.npcs.some(n => n.x === x && n.y === y) || (P.x === x && P.y === y)) continue;
+        const d = Math.abs(x - nearX) + (t === 'n' ? -3 : 0);
+        if (!best || d < best.d) best = { x, y, d };
+      }
+      return best;
+    }
+    function boardGranny() {
+      const n = npc('할머니', 11, 5, { speed: 1.6 });
+      const tx = Math.max(2, Math.min(19, P.x + (P.x < 11 ? 1 : -1)));
+      n.path = [[11, 4], [11, 3]];
+      let cx = 11; while (cx !== tx) { cx += tx > cx ? 1 : -1; n.path.push([cx, 3]); }
+      n.onDone = () => { n.ready = true; };
+      SC.train.npcs.push(n); M.granny = n;
+      toast('할머니가 타셨어요.');
+    }
+    function seatGranny() {
+      const s = freeSeat(M.granny.x); if (!s) return;
+      const n = M.granny; n.path = [];
+      let cx = n.x; while (cx !== s.x) { cx += s.x > cx ? 1 : -1; n.path.push([cx, 3]); }
+      n.path.push([s.x, s.y === 1 ? 2 : 4], [s.x, s.y]); n.seated = true;
+    }
+    async function yieldSeat() {
+      for (;;) {
+        const i = await talk('할머니', '(할머니가 손잡이를 잡고 힘들게 서 계세요.)', ['일어나서 자리를 양보해요', '모른 척해요']);
+        if (i === 0) break;
+        await talk('안내', '할머니는 오래 서 계시면 다리가 아프실 수 있어요. 자리를 양보하면 할머니도 편안해요.');
+      }
+      const sx = P.x, sy = P.y;
+      place(sx, 3);
+      const n = M.granny; n.path = [[sx, sy === 1 ? 2 : 4], [sx, sy]]; n.path.unshift([sx, 3]); n.seated = true;
+      await talk('할머니', '아이고, 고마워라. 마음씨가 참 곱구나.');
+      badge('yield', '자리 양보하기');
+    }
+  })();
+
+  /* ===== HOSPITAL ===== */
+  let HM = null;
+  (function () {
+    const W = 18, H = 12, g = grid(W, H, 'm'); border(g); g[H - 1][9] = 'X';
+    fill(g, 11, 1, 1, 3, 'W'); fill(g, 11, 4, 6, 1, 'W'); g[4][14] = 'R';
+    fill(g, 4, 6, 9, 1, 'C');
+    const m0 = () => ({ ticket: false, num: 4, called: false, seen: false, done: false, sitT: 0, idle: 0, hinted: false });
+    HM = m0();
+    function hGoal() {
+      const c = !HM.ticket ? 0 : !HM.called ? 1 : !HM.seen ? 2 : 3;
+      goal('병원 · 단계별 미션', ['입구 옆 빨간 번호표 기계에서 번호표를 뽑아요.', '파란 의자에 앉아서 전광판에 내 번호(07)가 나올 때까지 기다려요.', '오른쪽 위 1진료실로 들어가 의사 선생님과 이야기해요.', '처방전을 들고 병원 옆 약국으로 가요.'][c],
+        ['번호표 뽑기', '앉아서 기다리기', '진료 받기', '약국 가기'], c, HM.ticket ? ['내 번호: 07 · 지금 번호: ' + String(HM.num).padStart(2, '0')] : []);
+      SC.hospital.marker = c === 0 ? [7, 9] : c === 2 ? [14, 4] : null;
+    }
+    SC.hospital = {
+      id: 'hospital', g, bg: '#3A4448', hGoal,
+      labels: [[14, 1, '1진료실']],
+      objects: [
+        { x: 2, y: 2, w: 4, kind: 'desk2', sign: '접수 · 수납' },
+        { x: 7, y: 9, kind: 'machine', sign: '번호표', use: async () => {
+          if (HM.ticket) { toast('이미 번호표가 있어요. 내 번호는 7번이에요.'); return; }
+          await talk('번호표 기계', '번호표를 뽑을까요?', ['번호표 뽑기']);
+          HM.ticket = true; hGoal();
+          await talk('간호사', '7번이네요. 파란 의자에 앉아서 기다리면 전광판에 번호가 나와요.');
+        } },
+        { x: 7, y: 0, w: 3, kind: 'board', solid: true },
+        { x: 13, y: 2, kind: 'desk', label: '진료 책상' },
+        { x: 1, y: 9, kind: 'plant' }, { x: 16, y: 9, kind: 'plant' }
+      ],
+      npcs: [
+        npc('간호사', 3, 1, { talk: async () => {
+          const c = !HM.ticket ? 0 : !HM.called ? 1 : !HM.seen ? 2 : 3;
+          await talk('간호사', ['안녕하세요! 입구 옆 번호표 기계에서 번호표를 먼저 뽑아 주세요.', '파란 의자에 앉아서 기다려 주세요. 차례가 되면 불러 드릴게요.', '1진료실로 들어가세요. 오른쪽 위에 있어요.', '처방전은 병원 옆 약국에 가져가세요. 안녕히 가세요!'][c]);
+        } }),
+        npc('의사 선생님', 14, 2, { talk: async () => {
+          if (HM.seen) { await talk('의사 선생님', '약국에 처방전을 보여 주세요. 몸조심해요!'); return; }
+          await talk('의사 선생님', '안녕하세요. 오늘은 어디가 불편해서 왔어요?', ['머리가 아파요', '배가 아파요', '목이 아파요', '잠을 잘 못 자요']);
+          await talk('의사 선생님', '얼마나 불편한지 골라 볼까요?', ['조금 불편해요', '보통이에요', '많이 불편해요']);
+          await talk('의사 선생님', '말해 줘서 고마워요. 덕분에 어디가 불편한지 잘 알 수 있었어요. 약을 처방해 줄게요.');
+          await talk('의사 선생님', '처방전을 들고 병원 옆 약국에 가요.');
+          HM.seen = true; hGoal();
+        } })
+      ],
+      doors: [{ x: 9, y: 11, go: () => setScene('town', 3, 13) }],
+      enter() { if (HM.done) HM = m0(); hGoal(); announce(''); if (!HM.ticket) toast('병원에 들어왔어요. 먼저 번호표를 뽑아요.'); },
+      check(t) { if (t === 'R') return HM.called ? { ok: true } : { ok: false, msg: '아직 내 차례가 아니에요. 전광판 번호를 확인해요.' }; return null; },
+      update(dt) {
+        if (dialogOpen || busy || !HM.ticket || HM.called) return;
+        if (SC.hospital.g[P.y][P.x] === 'C' && !P.moving) {
+          HM.sitT += dt; HM.idle = 0;
+          if (HM.sitT >= 2.2) {
+            HM.sitT = 0; HM.num++; hGoal();
+            if (HM.num >= 7) { HM.called = true; run(async () => { await talk('간호사', '7번 환자분, 1진료실로 들어오세요.'); hGoal(); }); }
+          }
+        } else { HM.idle += dt; if (HM.idle > 4 && !HM.hinted) { HM.hinted = true; toast('파란 의자에 앉아서 기다려요. 의자를 눌러 보세요.', 3200); } }
+      }
+    };
+  })();
+
+  /* ===== PHARMACY ===== */
+  (function () {
+    const W = 12, H = 8, g = grid(W, H, 'm'); border(g); g[H - 1][6] = 'X';
+    async function serve() {
+      if (!HM.seen) { await talk('약사', '안녕하세요. 처방전이 있어야 약을 받을 수 있어요. 옆 병원에서 진료를 먼저 받고 오세요.'); return; }
+      if (HM.done) { await talk('약사', '약은 하루 세 번, 밥 먹고 30분 뒤에 먹어요. 안녕히 가세요!'); return; }
+      await talk('약사', '어서 오세요. 처방전 주시겠어요?', ['처방전 내기']);
+      await talk('약사', '약은 하루 세 번, 밥 먹고 30분 뒤에 먹어요.');
+      await talk('약사', '영수증은 점선을 따라 잘라서 가져가세요.');
+      await cutReceipt();
+      HM.done = true;
+      goal('약국', '약을 받았어요! 아래 출구로 나가요.', ['번호표 뽑기', '앉아서 기다리기', '진료 받기', '약국 가기'], 4);
+      await finish('hospital', '번호표를 뽑고, 의자에서 차례를 기다리고, 의사 선생님께 불편한 곳을 말하고, 약국에서 약까지 받았어요.');
+    }
+    SC.pharmacy = {
+      id: 'pharmacy', g, bg: '#3A4448',
+      objects: [{ x: 3, y: 2, w: 6, kind: 'counter', sign: '약 받는 곳', use: serve }, { x: 1, y: 1, h: 4, kind: 'medshelf' }, { x: 10, y: 1, h: 4, kind: 'medshelf' }],
+      npcs: [npc('약사', 6, 1, { talk: serve })],
+      doors: [{ x: 6, y: 7, go: () => setScene('town', 9, 13) }],
+      enter() {
+        announce('');
+        if (HM.seen && !HM.done) goal('약국', '약사 선생님께 처방전을 드려요.', ['번호표 뽑기', '앉아서 기다리기', '진료 받기', '약국 가기'], 3);
+        else goal('약국', HM.done ? '약을 받았어요.' : '병원에서 진료를 받으면 처방전을 받을 수 있어요.', null, 0);
+      }
+    };
+  })();
+
+  /* ===== SHOP ===== */
+  (function () {
+    const W = 12, H = 8, g = grid(W, H, 'o'); border(g); g[H - 1][6] = 'X';
+    const VQ = [
+      { q: '손은 얼마나 오래 씻어요?', o: ['물로 3초만 헹궈요', '비누로 30초 동안 꼼꼼히 씻어요'], a: 1 },
+      { q: '기침이 나오려고 해요.', o: ['옷소매로 입과 코를 가려요', '그냥 해요'], a: 0 },
+      { q: '감기 기운이 있는데 사람이 많은 곳에 가야 해요.', o: ['마스크를 써요', '그냥 가요'], a: 0 }
+    ];
+    async function virus() {
+      if (S.virus.length >= 3) { await talk('바이러스 막기', '튼튼 방패를 이미 받았어요! 손 씻기, 기침 예절, 마스크를 기억해요.'); return; }
+      for (let q = 0; q < 3; q++) {
+        if (S.virus.includes(q)) continue;
+        for (;;) {
+          const i = await talk('바이러스 막기 ' + (q + 1) + '/3', VQ[q].q, VQ[q].o);
+          if (i === VQ[q].a) break;
+          await talk('상점 주인', '바이러스가 다른 사람에게 옮지 않으려면 어떻게 해야 할까? 다시 골라 보자.');
+        }
+        S.virus.push(q); S.rubies += 1; save(); refresh(); toast('정답! 루비 +1');
+      }
+      await talk('상점 주인', '다 맞혔구나! 튼튼 방패를 줄게. 아바타 옆에 방패가 생겼어.');
+    }
+    SC.shop = {
+      id: 'shop', g, bg: '#3A4448',
+      objects: [
+        { x: 2, y: 1, w: 2, kind: 'mirror', sign: '꾸미기 거울', use: async () => { await openCloset(); } },
+        { x: 7, y: 3, w: 2, kind: 'rack', use: async () => { await openCloset(); } },
+        { x: 9, y: 0, kind: 'poster', virus: true, use: virus }
+      ],
+      npcs: [npc('상점 주인', 6, 2, { talk: async () => { await talk('상점 주인', '어서 와요! 미션을 하고 받은 루비로 왼쪽 거울 앞에서 꾸밀 수 있어요. 벽의 포스터에서는 바이러스 막는 방법을 배울 수 있어요.'); } })],
+      doors: [{ x: 6, y: 7, go: () => setScene('town', 26, 5) }],
+      enter() { announce(''); goal('루비 상점', '거울 앞에서 아바타를 꾸미고, 벽 포스터에서 바이러스 막기 퀴즈를 풀어요.', null, 0, ['내 루비: ' + S.rubies + '개']); }
+    };
+  })();
+
+  /* ---------------- modals ---------------- */
+  function modal(html) { const m = $('modal'); m.innerHTML = '<div class="mpanel">' + html + '</div>'; m.hidden = false; dialogOpen = true; gameEl.classList.add('talking'); }
+  function closeModal() { $('modal').hidden = true; dialogOpen = false; gameEl.classList.remove('talking'); }
+  function cutReceipt() {
+    return new Promise(res => {
+      modal('<h3>영수증 자르기</h3><p class="note">가위를 점선 끝까지 밀어서 영수증을 잘라요.</p>' +
+        '<div class="receipt" id="rc"><b>한걸음 약국 · 영수증</b><div class="r"><span>조제료</span><span>3,200원</span></div><div class="r"><span>약값</span><span>1,800원</span></div><div class="r"><b>합계</b><b>5,000원</b></div>' +
+        '<div class="cutline"><span class="scissor" id="scis"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="6" cy="7" r="3"/><circle cx="6" cy="17" r="3"/><path d="M8.5 8.5L20 18M8.5 15.5L20 6"/></svg></span></div><div class="tail note">약국 보관용</div></div>' +
+        '<label class="note" for="cutR">가위 움직이기</label><input class="cutrange" id="cutR" type="range" min="0" max="100" value="0">');
+      const r = $('cutR');
+      r.addEventListener('input', () => {
+        $('scis').style.left = r.value + '%';
+        if (+r.value >= 100 && !r.disabled) { r.disabled = true; $('rc').classList.add('cut'); setTimeout(() => { closeModal(); res(); }, 700); }
+      });
+      r.focus();
+    });
+  }
+  const ITEMS = [['hat', '노란 모자', 3], ['glasses', '동그란 안경', 3], ['scarf', '초록 목도리', 3], ['bag', '파란 가방', 4]];
+  function openCloset() {
+    return new Promise(res => {
+      let msg = '';
+      const draw = () => {
+        modal('<h3>꾸미기 거울</h3><p class="note">내 루비: ' + S.rubies + '개 · 갖고 싶은 것을 직접 골라요. 몇 번이든 바꿔도 괜찮아요.</p><div class="closet">' +
+          ITEMS.map(([id, name, p]) => { const own = S.owned.includes(id), on = S.worn.includes(id); return '<button class="citem' + (on ? ' on' : '') + '" data-id="' + id + '" type="button"><b>' + name + '</b><small>' + (own ? (on ? '입고 있어요 · 눌러서 벗기' : '내 물건 · 눌러서 입기') : '루비 ' + p + '개') + '</small></button>'; }).join('') +
+          '</div>' + (msg ? '<p class="note">' + msg + '</p>' : '') + '<button class="mbtn" id="mclose" type="button">다 골랐어요</button>');
+        $('modal').querySelectorAll('.citem').forEach(b => b.addEventListener('click', () => {
+          const id = b.dataset.id, it = ITEMS.find(x => x[0] === id);
+          if (S.owned.includes(id)) { S.worn = S.worn.includes(id) ? S.worn.filter(x => x !== id) : S.worn.concat(id); msg = ''; }
+          else if (S.rubies >= it[2]) { S.rubies -= it[2]; S.owned.push(id); S.worn.push(id); msg = it[1] + ' 획득! 잘 어울려요.'; }
+          else msg = '루비가 ' + (it[2] - S.rubies) + '개 더 필요해요. 미션을 하거나 이웃에게 인사하면 루비를 받아요.';
+          save(); refresh(); draw();
+        }));
+        $('mclose').addEventListener('click', () => { closeModal(); res(); });
+        $('mclose').focus({ preventScroll: true });
+      };
+      draw();
+    });
+  }
+
+  /* ---------------- scene control ---------------- */
+  function run(fn) { busy = true; return Promise.resolve().then(fn).catch(e => console.error(e)).finally(() => { busy = false; }); }
+  function place(x, y) { P.x = x; P.y = y; P.px = x * TS; P.py = y * TS; P.moving = false; P.path = []; P.pending = null; P.trail = []; }
+  function setScene(id, x, y) {
+    cur = id; place(x, y); held = null;
+    const sc = scene();
+    sc.npcs.filter(n => n.follow != null).forEach(n => { n.x = x; n.y = y; n.px = x * TS; n.py = y * TS; });
+    fadeT = S.calm ? 0 : 0.35;
+    renderChips();
+    if (sc.enter) run(() => sc.enter());
+  }
+  let fadeT = 0;
+
+  /* ---------------- pathfinding & interaction ---------------- */
+  function bfs(sc, sx, sy, isGoal) {
+    const W = sc.g[0].length, H = sc.g.length, prev = new Int32Array(W * H).fill(-1), seen = new Uint8Array(W * H);
+    const q = [sy * W + sx]; seen[sy * W + sx] = 1;
+    while (q.length) {
+      const k = q.shift(), x = k % W, y = (k / W) | 0;
+      if (k !== sy * W + sx && isGoal(x, y)) { const path = []; let c = k; while (c !== sy * W + sx) { path.unshift([c % W, (c / W) | 0]); c = prev[c]; } return path; }
+      for (const [dx, dy] of DIRS) {
+        const nx = x + dx, ny = y + dy, nk = ny * W + nx;
+        if (nx < 0 || ny < 0 || nx >= W || ny >= H || seen[nk]) continue;
+        if (!passable(sc, nx, ny)) continue;
+        if (sc.g[ny][nx] === 'D' || sc.g[ny][nx] === 'X') { if (!isGoal(nx, ny)) continue; }
+        seen[nk] = 1; prev[nk] = k; q.push(nk);
+      }
+    }
+    return null;
+  }
+  function targetTiles(tg) {
+    if (tg.type === 'npc') return [[tg.ref.x, tg.ref.y]];
+    const o = tg.ref, out = [];
+    for (let j = 0; j < (o.h || 1); j++) for (let i = 0; i < (o.w || 1); i++) out.push([o.x + i, o.y + j]);
+    return out;
+  }
+  function isAdj(tg, x, y) { return targetTiles(tg).some(([tx, ty]) => Math.abs(tx - x) + Math.abs(ty - y) === 1 || (tg.type === 'obj' && tg.ref.solid === false && tx === x && ty === y)); }
+  function goInteract(tg) {
+    if (isAdj(tg, P.x, P.y) && !P.moving) { doInteract(tg); return; }
+    const path = bfs(scene(), P.x, P.y, (x, y) => isAdj(tg, x, y));
+    if (!path) { toast('그곳까지 갈 수 있는 길이 없어요.'); return; }
+    P.path = path; P.pending = tg;
+  }
+  function goTo(x, y) {
+    if (x === P.x && y === P.y) return;
+    const path = bfs(scene(), P.x, P.y, (a, b) => a === x && b === y);
+    if (path) { P.path = path; P.pending = null; }
+  }
+  function doInteract(tg) {
+    const f = tg.type === 'npc' ? tg.ref.talk : tg.ref.use;
+    if (f) run(() => f(tg.ref));
+  }
+  function nearbyTarget() {
+    const sc = scene();
+    const ns = sc.npcs.filter(n => !n.temp && n.talk && Math.abs(n.x - P.x) + Math.abs(n.y - P.y) === 1);
+    const fixed = ns.find(n => n.follow == null); if (fixed) return { type: 'npc', ref: fixed };
+    const o = sc.objects.find(o => o.use && isAdj({ type: 'obj', ref: o }, P.x, P.y)); if (o) return { type: 'obj', ref: o };
+    if (ns[0]) return { type: 'npc', ref: ns[0] };
+    return null;
+  }
+  function actNow() {
+    if (!started || dialogOpen || busy) return;
+    const t = nearbyTarget();
+    if (t) doInteract(t); else toast('가까이에 말을 걸 사람이나 살펴볼 물건이 없어요.');
+  }
+
+  /* ---------------- update ---------------- */
+  let time = 0;
+  function moveEnt(e, dt, speed) {
+    const tx = e.x * TS, ty = e.y * TS, sp = speed * TS * dt;
+    const dx = tx - e.px, dy = ty - e.py;
+    e.px += Math.max(-sp, Math.min(sp, dx)); e.py += Math.max(-sp, Math.min(sp, dy));
+    if (Math.abs(dx) > 0.5) e.dir = dx > 0 ? 'right' : 'left'; else if (Math.abs(dy) > 0.5) e.dir = dy > 0 ? 'down' : 'up';
+    e.moving = Math.abs(tx - e.px) > 0.01 || Math.abs(ty - e.py) > 0.01;
+    if (!e.moving) { e.px = tx; e.py = ty; }
+  }
+  const WANDER = new Set(['g', 's', 'p', 'f', 'y', 'o', 'h', 'm']);
+  function update(dt) {
+    time += dt; if (fadeT > 0) fadeT -= dt;
+    const sc = scene();
+    if (SC.town !== sc) updateTown(dt); // keep traffic running in the background
+    if (sc.update) sc.update(dt);
+    if (!started) return;
+
+    // NPCs
+    for (const n of sc.npcs) {
+      moveEnt(n, dt, n.speed || (S.calm ? 2.4 : 3.2));
+      if (n.moving) continue;
+      if (n.path && n.path.length) { const [x, y] = n.path.shift(); n.x = x; n.y = y; continue; }
+      if (n.onDone) { const f = n.onDone; n.onDone = null; f(); }
+      if (n.follow != null) { const t = P.trail[n.follow]; if (t && (t[0] !== n.x || t[1] !== n.y)) { n.x = t[0]; n.y = t[1]; } continue; }
+      if (n.wander && !dialogOpen) {
+        n.wt -= dt;
+        if (n.wt <= 0) {
+          n.wt = (S.calm ? 4.5 : 1.8) + Math.random() * 2.5;
+          const [dx, dy] = DIRS[Math.floor(Math.random() * 4)], x = n.x + dx, y = n.y + dy, [x0, y0, x1, y1] = n.wander;
+          if (x >= x0 && x <= x1 && y >= y0 && y <= y1 && inb(sc, x, y) && WANDER.has(sc.g[y][x]) && !objAt(sc, x, y) && !(x === P.x && y === P.y) && !sc.npcs.some(o => o !== n && o.x === x && o.y === y)) { n.x = x; n.y = y; }
+        }
+      }
+    }
+    sc.npcs = sc.npcs.filter(n => !n.remove);
+
+    // player
+    const speed = S.calm ? 3.4 : 4.4;
+    if (P.moving) {
+      moveEnt(P, dt, speed);
+      if (!P.moving) arrive();
+    } else if (!dialogOpen && !busy) {
+      let next = null, fromPath = false;
+      if (held) { next = [P.x + held[0], P.y + held[1]]; P.path = []; P.pending = null; }
+      else if (P.path.length) { next = P.path[0]; fromPath = true; }
+      if (next) {
+        const r = canEnter(sc, next[0], next[1]);
+        if (r.ok) { P.prev = [P.x, P.y]; P.x = next[0]; P.y = next[1]; P.moving = true; if (fromPath) P.path.shift(); }
+        else {
+          if (r.msg) toast(r.msg);
+          if (!r.wait) { P.path = []; P.pending = null; }
+          if (held) { P.dir = held[0] > 0 ? 'right' : held[0] < 0 ? 'left' : held[1] > 0 ? 'down' : 'up'; }
+        }
+      }
+    }
+    const t = nearbyTarget();
+    $('actBtn').classList.toggle('ready', !!t && !dialogOpen);
+  }
+  function arrive() {
+    const sc = scene();
+    if (P.prev) { P.trail.unshift(P.prev); if (P.trail.length > 4) P.trail.length = 4; }
+    const tile = sc.g[P.y][P.x];
+    if (sc.onStep) sc.onStep(P.x, P.y, tile);
+    if (scene() !== sc) return;
+    const d = sc.doors.find(d => d.x === P.x && d.y === P.y);
+    if (d) { P.path = []; P.pending = null; held = null; d.go(); return; }
+    if (!P.path.length && P.pending) { const tg = P.pending; P.pending = null; if (isAdj(tg, P.x, P.y)) doInteract(tg); }
+  }
+
+  /* ---------------- rendering ---------------- */
+  let vw = 0, vh = 0, dpr = 1, zoom = 1, camX = 0, camY = 0;
+  function resize() {
+    const r = gameEl.getBoundingClientRect(); vw = r.width; vh = r.height; dpr = Math.min(2, window.devicePixelRatio || 1);
+    cv.width = Math.round(vw * dpr); cv.height = Math.round(vh * dpr);
+    zoom = Math.max(1, Math.min(1.45, vw / (17 * TS)));
+  }
+  function rr(x, y, w, h, r) { ctx.beginPath(); ctx.roundRect ? ctx.roundRect(x, y, w, h, r) : ctx.rect(x, y, w, h); ctx.fill(); }
+  function circ(x, y, r) { ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill(); }
+  function ell(x, y, rx, ry) { ctx.beginPath(); ctx.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2); ctx.fill(); }
+  function hsh(x, y) { return ((x * 73856093) ^ (y * 19349663)) >>> 0; }
+
+  function tile(sc, t, x, y) {
+    const X = x * TS, Y = y * TS, h = hsh(x, y);
+    const grass = () => { ctx.fillStyle = h % 5 === 0 ? '#93C472' : '#9BCB7A'; ctx.fillRect(X, Y, TS, TS); if (h % 7 === 0) { ctx.fillStyle = '#85B865'; ctx.fillRect(X + (h % 20) + 4, Y + ((h >> 5) % 18) + 6, 2, 5); ctx.fillRect(X + (h % 20) + 7, Y + ((h >> 5) % 18) + 8, 2, 3); } };
+    const floor = (c, line) => { ctx.fillStyle = c; ctx.fillRect(X, Y, TS, TS); if (line) { ctx.strokeStyle = line; ctx.lineWidth = 1; ctx.strokeRect(X + .5, Y + .5, TS - 1, TS - 1); } };
+    switch (t) {
+      case 'g': grass(); break;
+      case 'T': grass(); ctx.fillStyle = 'rgba(0,0,0,.15)'; ell(X + 16, Y + 27, 11, 4); ctx.fillStyle = '#7A5534'; ctx.fillRect(X + 14, Y + 17, 4, 10); ctx.fillStyle = '#3F8A45'; circ(X + 16, Y + 13, 12); ctx.fillStyle = '#56A35A'; circ(X + 12, Y + 10, 7); break;
+      case 'f': grass(); ['#F2C14E', '#E86A92', '#FFFFFF', '#B48ED0'].forEach((c, i) => { if ((h >> i) % 3 === 0) { ctx.fillStyle = c; circ(X + 5 + ((h >> (i * 3)) % 22), Y + 5 + ((h >> (i * 4 + 2)) % 22), 2.3); } }); break;
+      case 'b': grass(); ctx.fillStyle = '#8C5E3C'; rr(X + 2, Y + 10, TS - 4, 9, 2); ctx.fillStyle = '#6E4A2E'; ctx.fillRect(X + 4, Y + 19, 3, 6); ctx.fillRect(X + TS - 7, Y + 19, 3, 6); break;
+      case 'w': ctx.fillStyle = '#7FB8D9'; ctx.fillRect(X, Y, TS, TS); ctx.fillStyle = 'rgba(255,255,255,.35)'; ctx.fillRect(X + 6 + (Math.sin(time + x) * 3), Y + 10, 10, 2); break;
+      case 's': case 'D': floor('#DAD5CB', 'rgba(0,0,0,.07)'); break;
+      case 'p': floor('#D4C8B1'); ctx.fillStyle = 'rgba(0,0,0,.06)'; ctx.fillRect(X, Y + 15, TS, 1); ctx.fillRect(X + (y % 2 ? 8 : 24), Y, 1, 15); ctx.fillRect(X + (y % 2 ? 24 : 8), Y + 16, 1, 16); break;
+      case 'y': floor('#E5D2A2'); if (h % 4 === 0) { ctx.fillStyle = '#D6C08C'; circ(X + h % 26 + 3, Y + (h >> 4) % 26 + 3, 1.5); } break;
+      case 'r': floor('#5C6168'); break;
+      case 'c': floor('#5C6168'); ctx.fillStyle = '#F4F4F4'; for (let i = 0; i < 4; i++) ctx.fillRect(X + 2 + i * 8, Y + 1, 5, TS - 2); break;
+      case 'B': floor('#B0A99A'); break;
+      case 'W': floor('#7D8C93'); ctx.fillStyle = '#93A2A9'; ctx.fillRect(X, Y, TS, 6); break;
+      case 'o': floor('#E8D4B0'); ctx.fillStyle = 'rgba(120,80,40,.12)'; ctx.fillRect(X, Y + 10, TS, 1); ctx.fillRect(X, Y + 21, TS, 1); break;
+      case 'h': floor('#DCD6C8', 'rgba(0,0,0,.05)'); break;
+      case 'm': floor('#EEF0EC', 'rgba(0,0,0,.06)'); break;
+      case 'X': floor(sc.id === 'school' || sc.id === 'shop' ? '#E8D4B0' : '#EEF0EC'); ctx.fillStyle = '#4F8C3A'; rr(X + 3, Y + 3, TS - 6, TS - 6, 5); ctx.fillStyle = '#fff'; ctx.font = '11px ' + FONT_D; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('나가기', X + 16, Y + 16); break;
+      case 'G': floor('#C9CED2'); break;
+      case 'S': floor('#E9C94A'); ctx.fillStyle = '#9FC3D1'; ctx.fillRect(X, Y + 8, TS, TS - 8); ctx.fillStyle = '#6E8792'; ctx.fillRect(X, Y + 8, TS, 3); break;
+      case 'P': { floor('#E9C94A'); const side = x <= 8 ? 'L' : 'R', st = TR[side].st, open = st === 'alight' || st === 'board'; ctx.fillStyle = '#6E8792'; ctx.fillRect(X, Y + 8, TS, 3); ctx.fillStyle = '#B9DCE8'; if (open) { ctx.fillRect(X, Y + 11, 4, TS - 11); ctx.fillRect(X + TS - 4, Y + 11, 4, TS - 11); } else { ctx.fillRect(X, Y + 11, TS, TS - 11); ctx.fillStyle = '#6E8792'; ctx.fillRect(X + 15, Y + 11, 2, TS - 11); } break; }
+      case 't': floor('#4A4F55'); ctx.fillStyle = '#6B5544'; for (let i = 0; i < 4; i++) ctx.fillRect(X + i * 8 + 1, Y + 6, 4, TS - 12); ctx.fillStyle = '#A3A9B0'; ctx.fillRect(X, Y + 9, TS, 2); ctx.fillRect(X, Y + TS - 11, TS, 2); break;
+      case 'q': case 'k': case 'n': floor('#D9DDE0'); ctx.fillStyle = t === 'q' ? '#5F84BF' : t === 'k' ? '#EFA0BC' : '#F0B45A'; rr(X + 1, Y + (y === 1 ? 2 : 8), TS - 2, TS - 10, 4); break;
+      case 'E': floor('#D9DDE0'); { const open = SC.train && SC.train.M && SC.train.M.doors; ctx.fillStyle = '#E9C94A'; ctx.fillRect(X, Y, TS, 4); ctx.fillStyle = open ? '#E9C94A' : '#9AA5AD'; ctx.fillRect(X + 1, Y + 4, TS - 2, TS - 4); if (!open) { ctx.fillStyle = '#7A858D'; ctx.fillRect(X + 15, Y + 4, 2, TS - 4); } } break;
+      case 'C': floor('#EEF0EC', 'rgba(0,0,0,.06)'); ctx.fillStyle = '#5F94C4'; rr(X + 3, Y + 4, TS - 6, TS - 8, 5); ctx.fillStyle = '#4A7CAB'; rr(X + 3, Y + 4, TS - 6, 7, 4); break;
+      case 'R': floor('#B07A4A'); ctx.fillStyle = '#8F5F36'; ctx.fillRect(X + 15, Y, 2, TS); break;
+      default: floor('#333');
+    }
+  }
+  function sign(text, cx, cy, bg, fg, size) {
+    ctx.font = (size || 13) + 'px ' + FONT_D; const w = ctx.measureText(text).width + 14, h = (size || 13) + 10;
+    ctx.fillStyle = 'rgba(0,0,0,.18)'; rr(cx - w / 2 + 1, cy - h / 2 + 2, w, h, 6);
+    ctx.fillStyle = bg || '#FFFDF8'; rr(cx - w / 2, cy - h / 2, w, h, 6);
+    ctx.fillStyle = fg || '#1E2D2A'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(text, cx, cy + 1);
+  }
+  function drawBuilding(b) {
+    const X = b.x * TS, Y = b.y * TS, W = b.w * TS, H = b.h * TS;
+    ctx.fillStyle = 'rgba(0,0,0,.18)'; rr(X + 5, Y + 7, W, H, 8);
+    ctx.fillStyle = b.color; rr(X, Y, W, H, 8);
+    ctx.fillStyle = 'rgba(255,255,255,.16)'; rr(X + 6, Y + 6, W - 12, H - 12, 5);
+    ctx.fillStyle = 'rgba(0,0,0,.1)'; rr(X + W - 22, Y + 10, 12, 10, 2);
+    const dx = b.door[0] * TS, ay = b.top ? Y : Y + H - 9;
+    for (let i = -1; i <= 1; i++) for (let k = 0; k < 4; k++) { ctx.fillStyle = k % 2 ? '#FFFFFF' : shade(b.color); ctx.fillRect(dx + i * TS + k * 8, ay, 8, 9); }
+    ctx.fillStyle = '#5A3E2B'; rr(dx + 7, b.top ? Y - 3 : Y + H - 6, TS - 14, 9, 2);
+    const cy = Y + H / 2 + (b.top ? 4 : -4);
+    sign(b.name, X + W / 2, cy, '#FFFDF8', '#1E2D2A', b.w <= 3 ? 12 : 14);
+    if (b.id === 'station') { ctx.fillStyle = '#996CAC'; circ(X + 14, Y + 14, 9); ctx.fillStyle = '#fff'; ctx.font = '12px ' + FONT_D; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('5', X + 14, Y + 15); }
+    if (b.id === 'hospital' || b.id === 'pharmacy') { ctx.fillStyle = b.id === 'hospital' ? '#D9443A' : '#2F7D58'; ctx.fillRect(X + W - 22, Y + H - 22, 12, 4); ctx.fillRect(X + W - 18, Y + H - 26, 4, 12); }
+    if (b.id === 'school') { ctx.fillStyle = '#6E5A45'; ctx.fillRect(X + 14, Y + 6, 2, 16); ctx.fillStyle = '#D9443A'; ctx.fillRect(X + 16, Y + 6, 10, 7); }
+  }
+  function shade(hex) { const n = parseInt(hex.slice(1), 16); const f = c => Math.max(0, Math.round(c * .78)); return 'rgb(' + f(n >> 16) + ',' + f((n >> 8) & 255) + ',' + f(n & 255) + ')'; }
+  function drawObj(o) {
+    const X = o.x * TS, Y = o.y * TS, W = (o.w || 1) * TS, H = (o.h || 1) * TS;
+    switch (o.kind) {
+      case 'desk': ctx.fillStyle = '#B98B5E'; rr(X + 4, Y + 7, W - 8, H - 13, 4); ctx.fillStyle = '#9C7148'; ctx.fillRect(X + 6, Y + H - 7, W - 12, 3); break;
+      case 'book': ctx.fillStyle = '#7A5234'; rr(X + 2, Y + 3, W - 4, H - 6, 3); ['#D9443A', '#3F6FB8', '#E7B54C', '#4F8C3A', '#8A6FB0'].forEach((c, i) => { ctx.fillStyle = c; ctx.fillRect(X + 5 + i * 5, Y + 6, 4, 9); ctx.fillRect(X + 5 + i * 5, Y + 17, 4, 9); }); if (o.sign) sign(o.sign, X + W / 2, Y - 2, '#FFE9A8', '#1E2D2A', 10); break;
+      case 'piano': ctx.fillStyle = '#2A2A2E'; rr(X + 2, Y + 3, W - 4, H - 8, 3); ctx.fillStyle = '#fff'; ctx.fillRect(X + 4, Y + H - 13, W - 8, 6); ctx.fillStyle = '#2A2A2E'; for (let i = 0; i < 10; i++) ctx.fillRect(X + 7 + i * 5.5, Y + H - 13, 2, 3); break;
+      case 'drum': ctx.fillStyle = '#C24A3E'; circ(X + 16, Y + 16, 11); ctx.fillStyle = '#F2E6D8'; circ(X + 16, Y + 16, 8); break;
+      case 'xylo': ['#D9443A', '#E7B54C', '#4F8C3A', '#3F6FB8', '#8A6FB0'].forEach((c, i) => { ctx.fillStyle = c; ctx.fillRect(X + 4 + i * 5, Y + 6 + i, 4, 20 - i * 2); }); break;
+      case 'bed': ctx.fillStyle = '#FFFFFF'; rr(X + 3, Y + 4, W - 6, H - 8, 4); ctx.fillStyle = '#8FB8DE'; rr(X + 18, Y + 6, W - 24, H - 12, 3); break;
+      case 'cabinet': ctx.fillStyle = '#F4F4F4'; rr(X + 3, Y + 3, W - 6, H - 6, 3); ctx.fillStyle = '#D9443A'; ctx.fillRect(X + 13, Y + 9, 6, 14); ctx.fillRect(X + 9, Y + 13, 14, 6); break;
+      case 'table': ctx.fillStyle = '#C9A27A'; rr(X + 3, Y + 5, W - 6, H - 10, 5); ctx.fillStyle = '#fff'; circ(X + 10, Y + 15, 4); circ(X + 22, Y + 17, 4); break;
+      case 'poster': if (o.virus) { ctx.fillStyle = '#E8F4EC'; rr(X + 4, Y + 4, W - 8, H - 8, 3); ctx.fillStyle = '#2F7D58'; circ(X + 16, Y + 15, 6); } else { ctx.fillStyle = '#FFE08A'; rr(X + 4, Y + 3, W - 8, H - 6, 3); ctx.fillStyle = '#1E2D2A'; ctx.font = '10px ' + FONT_D; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('규칙', X + 16, Y + 16); } break;
+      case 'shelf': ctx.fillStyle = '#C9CED2'; rr(X + 2, Y + 4, W - 4, H - 8, 4); for (let i = 0; i < (o.w || 1) * 4; i++) { ctx.fillStyle = i % 3 === 0 ? o.color : i % 3 === 1 ? shade(o.color) : '#FFFFFF'; rr(X + 5 + i * 7.5, Y + 8, 6, H - 16, 2); } sign(o.sign, X + W / 2, Y - 3, o.color, '#fff', 12); break;
+      case 'fridge': ctx.fillStyle = '#BFDDF0'; rr(X + 3, Y + 2, W - 6, H - 4, 4); for (let i = 0; i < 9; i++) { ctx.fillStyle = ['#FFFFFF', '#F2A33A', '#6FB86A'][i % 3]; rr(X + 8, Y + 8 + i * 16, 16, 10, 3); } sign(o.sign, X - 24, Y + 8, '#6FA8DC', '#fff', 11); break;
+      case 'counter': ctx.fillStyle = '#8C7A6B'; rr(X + 1, Y + 6, W - 2, H - 10, 4); ctx.fillStyle = '#B9A99B'; rr(X + 1, Y + 6, W - 2, 6, 3); ctx.fillStyle = '#2A2A2E'; rr(X + W - 26, Y + 12, 16, 10, 2); sign(o.sign, X + W / 2, Y + H + 6, '#FFFDF8', '#1E2D2A', 11); break;
+      case 'cart': ctx.strokeStyle = '#7D8C93'; ctx.lineWidth = 2; ctx.strokeRect(X + 7, Y + 8, 18, 13); ctx.fillStyle = '#7D8C93'; circ(X + 10, Y + 24, 2.5); circ(X + 22, Y + 24, 2.5); break;
+      case 'gatebar': for (let i = 0; i < (o.w || 1); i++) { const gx = X + i * TS; ctx.fillStyle = '#7D8C93'; rr(gx + 1, Y + 4, 6, TS - 8, 2); rr(gx + TS - 7, Y + 4, 6, TS - 8, 2); ctx.fillStyle = ST.gate ? '#4FBF7A' : '#D9443A'; if (ST.gate) { ctx.fillRect(gx + 7, Y + 6, 4, 4); ctx.fillRect(gx + TS - 11, Y + 6, 4, 4); } else rr(gx + 7, Y + 13, TS - 14, 6, 2); } break;
+      case 'linemap': ctx.fillStyle = '#FFFFFF'; rr(X + 3, Y + 4, W - 6, H - 8, 3); ctx.fillStyle = '#996CAC'; ctx.fillRect(X + 8, Y + 15, W - 16, 3); for (let i = 0; i < 6; i++) { ctx.fillStyle = i === 2 ? '#D9443A' : '#fff'; ctx.strokeStyle = '#996CAC'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(X + 12 + i * ((W - 24) / 5), Y + 16.5, 3, 0, 7); ctx.fill(); ctx.stroke(); } break;
+      case 'plant': ctx.fillStyle = '#B07A4A'; rr(X + 10, Y + 18, 12, 10, 2); ctx.fillStyle = '#4F8C3A'; circ(X + 16, Y + 13, 8); break;
+      case 'desk2': ctx.fillStyle = '#E5E0D8'; rr(X + 1, Y + 4, W - 2, H - 8, 4); ctx.fillStyle = '#B9B2A6'; rr(X + 1, Y + 4, W - 2, 6, 3); ctx.fillStyle = '#3B4A52'; rr(X + 14, Y + 12, 16, 10, 2); sign(o.sign, X + W / 2, Y + H + 6, '#FFFDF8', '#1E2D2A', 11); break;
+      case 'machine': ctx.fillStyle = '#E05A47'; rr(X + 6, Y + 2, W - 12, H - 4, 4); ctx.fillStyle = '#FFFFFF'; rr(X + 9, Y + 6, W - 18, 9, 2); ctx.fillStyle = '#2A2A2E'; ctx.fillRect(X + 11, Y + 20, W - 22, 3); sign(o.sign, X + W / 2, Y - 4, '#E05A47', '#fff', 11); break;
+      case 'board': ctx.fillStyle = '#22262C'; rr(X + 2, Y + 3, W - 4, H - 4, 4); ctx.fillStyle = '#7CF0A8'; ctx.font = '18px ' + FONT_D; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(HM && HM.ticket ? '지금 ' + String(HM.num).padStart(2, '0') + '번' : '진료 대기', X + W / 2, Y + H / 2 + 2); break;
+      case 'medshelf': ctx.fillStyle = '#F4F4F4'; rr(X + 3, Y + 2, W - 6, H - 4, 3); for (let i = 0; i < 10; i++) { ctx.fillStyle = ['#8FB8DE', '#F2A33A', '#E86A92', '#6FB86A'][i % 4]; rr(X + 8, Y + 6 + i * 12, 16, 8, 2); } break;
+      case 'mirror': ctx.fillStyle = '#B07A4A'; rr(X + 6, Y + 2, W - 12, H - 4, 8); ctx.fillStyle = '#CFE7F0'; rr(X + 10, Y + 5, W - 20, H - 10, 6); ctx.fillStyle = 'rgba(255,255,255,.6)'; ctx.fillRect(X + 16, Y + 8, 4, 14); sign(o.sign, X + W / 2, Y + H + 6, '#C94F7C', '#fff', 11); break;
+      case 'rack': ctx.fillStyle = '#7D8C93'; ctx.fillRect(X + 4, Y + 6, W - 8, 3); ['#E7B54C', '#4F8C3A', '#3F6FB8', '#E07A9A', '#8A6FB0'].forEach((c, i) => { ctx.fillStyle = c; rr(X + 8 + i * 10, Y + 9, 8, 16, 2); }); break;
+    }
+  }
+  function drawPerson(e, isPlayer) {
+    const L = e.look, cx = e.px + TS / 2, base = e.py + TS - 3;
+    const b = (e.moving && !S.calm) ? -Math.abs(Math.sin(time * 12)) * 2 : 0;
+    const acc = isPlayer ? new Set(S.worn.concat(S.virus.length >= 3 ? ['shield'] : [])) : new Set();
+    ctx.fillStyle = 'rgba(0,0,0,.2)'; ell(cx, base, 9, 3.5);
+    if (acc.has('bag')) { ctx.fillStyle = '#3F6FB8'; rr(cx + 5, base - 14 + b, 7, 9, 2); }
+    ctx.fillStyle = L.body; rr(cx - 8, base - 15 + b, 16, 13, 6);
+    if (acc.has('scarf')) { ctx.fillStyle = '#4F8C3A'; rr(cx - 8, base - 15 + b, 16, 4, 2); ctx.fillRect(cx + 2, base - 13 + b, 4, 7); }
+    const hy = base - 22 + b;
+    ctx.fillStyle = L.skin || '#F2C9A5'; circ(cx, hy, 8);
+    ctx.fillStyle = L.hair || '#2A2320';
+    if (e.dir === 'up') circ(cx, hy, 8.3);
+    else { ctx.beginPath(); ctx.arc(cx, hy - 1, 8.4, Math.PI, 0); ctx.fill(); }
+    if (L.long) { rr(cx - 8.6, hy - 2, 3.4, 11, 2); rr(cx + 5.2, hy - 2, 3.4, 11, 2); }
+    if (e.dir !== 'up') {
+      ctx.fillStyle = '#2A2320';
+      const ox = e.dir === 'left' ? -2 : e.dir === 'right' ? 2 : 0;
+      circ(cx - 3 + ox, hy + 1.5, 1.3); circ(cx + 3 + ox, hy + 1.5, 1.3);
+      if (acc.has('glasses')) { ctx.strokeStyle = '#2A2320'; ctx.lineWidth = 1.1; ctx.beginPath(); ctx.arc(cx - 3 + ox, hy + 1.5, 3, 0, 7); ctx.moveTo(cx + 6 + ox, hy + 1.5); ctx.arc(cx + 3 + ox, hy + 1.5, 3, 0, 7); ctx.stroke(); }
+    }
+    if (L.cap || acc.has('hat')) { ctx.fillStyle = L.cap || '#E2B04F'; ctx.beginPath(); ctx.arc(cx, hy - 2, 8.7, Math.PI, 0); ctx.fill(); rr(cx - (e.dir === 'left' ? 12 : 8), hy - 3.5, 20, 3, 1.5); }
+    if (acc.has('shield')) { ctx.fillStyle = '#2F9C68'; ctx.beginPath(); ctx.moveTo(cx - 14, base - 16 + b); ctx.lineTo(cx - 7, base - 14 + b); ctx.lineTo(cx - 7, base - 8 + b); ctx.quadraticCurveTo(cx - 10, base - 3 + b, cx - 10.5, base - 3 + b); ctx.quadraticCurveTo(cx - 14, base - 6 + b, cx - 14, base - 8 + b); ctx.closePath(); ctx.fill(); }
+    if (e.dog) { const dx = e.px - 6, dy = e.py + TS - 8; ctx.fillStyle = 'rgba(0,0,0,.15)'; ell(dx + 4, dy + 5, 7, 2.5); ctx.fillStyle = '#B5835A'; rr(dx - 3, dy - 4, 13, 7, 3); circ(dx - 3, dy - 5, 4); ctx.fillStyle = '#8A5E3C'; circ(dx - 5, dy - 8, 2); ctx.fillStyle = '#2A2320'; circ(dx - 4, dy - 5, .9); }
+  }
+  function nameTag(e) {
+    ctx.font = '11px ' + FONT_B; const w = ctx.measureText(e.name).width + 10;
+    ctx.fillStyle = 'rgba(255,255,255,.92)'; rr(e.px + TS / 2 - w / 2, e.py - 18, w, 15, 7);
+    ctx.fillStyle = '#1E2D2A'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(e.name, e.px + TS / 2, e.py - 10);
+  }
+  function marker(x, y, color) {
+    const X = x * TS + TS / 2, Y = y * TS - 12 + (S.calm ? 0 : Math.sin(time * 4) * 4);
+    ctx.fillStyle = color || '#F2C14E'; ctx.strokeStyle = '#1E2D2A'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(X - 8, Y - 10); ctx.lineTo(X + 8, Y - 10); ctx.lineTo(X, Y); ctx.closePath(); ctx.fill(); ctx.stroke();
+  }
+  function drawCar(c) {
+    const X = c.x * TS, Y = (c.lane === 0 ? 10 : 11) * TS + 5, W = c.len * TS, H = TS - 10;
+    ctx.fillStyle = 'rgba(0,0,0,.25)'; rr(X + 2, Y + 3, W, H, 7);
+    ctx.fillStyle = c.color; rr(X, Y, W, H, 7);
+    ctx.fillStyle = 'rgba(30,45,60,.55)'; const wx = c.lane === 0 ? X + W - 20 : X + 8; rr(wx, Y + 3, 12, H - 6, 3); rr(c.lane === 0 ? X + 6 : X + W - 16, Y + 4, 9, H - 8, 2);
+    ctx.fillStyle = '#FFF4B0'; const hx = c.lane === 0 ? X + W - 3 : X; ctx.fillRect(hx, Y + 2, 3, 4); ctx.fillRect(hx, Y + H - 6, 3, 4);
+  }
+  function drawPedLight(x, y) {
+    const X = x * TS, Y = y * TS;
+    ctx.fillStyle = '#3B4246'; ctx.fillRect(X + 6, Y + 16, 3, 16);
+    ctx.fillStyle = '#22262C'; rr(X, Y - 6, 15, 24, 3);
+    const g = pedGreen();
+    ctx.fillStyle = g ? '#2A2F33' : '#FF5A4E'; circ(X + 7.5, Y + 1, 4.5);
+    ctx.fillStyle = g ? '#4FE08A' : '#2A2F33'; circ(X + 7.5, Y + 11, 4.5);
+    if (Math.abs(P.y - 10.5) < 3 && Math.abs(P.x - x) < 4 && cur === 'town') {
+      const remain = g ? Math.ceil(16 - lightPhase()) : Math.ceil(9 - lightPhase());
+      ctx.font = '11px ' + FONT_D; ctx.fillStyle = g ? '#1E7A45' : '#B23A30'; ctx.textAlign = 'center'; ctx.fillText((g ? '건너요 ' : '기다려요 ') + remain, X + 7.5, Y - 12);
+    }
+  }
+  function drawTrainSide(side) {
+    const T = TR[side]; if (T.st === 'none' || T.st === 'wait' || T.st === 'rest') return;
+    const x0 = side === 'L' ? 1 : 11, X0 = x0 * TS;
+    ctx.save(); ctx.beginPath(); ctx.rect(X0, 12 * TS, 8 * TS, 2 * TS); ctx.clip();
+    const X = X0 + T.x * TS, Y = 12 * TS + 5, W = 8 * TS, H = 2 * TS - 10;
+    ctx.fillStyle = '#E9ECEF'; rr(X, Y, W, H, 10);
+    ctx.fillStyle = '#996CAC'; ctx.fillRect(X, Y + H / 2 - 4, W, 8);
+    ctx.fillStyle = '#5E7C8A'; for (let i = 0; i < 8; i++) rr(X + 6 + i * TS, Y + 6, TS - 12, 12, 3);
+    const open = T.st === 'alight' || T.st === 'board';
+    (side === 'L' ? [3, 6] : [13, 16]).forEach(dx => { const DX = X + (dx - x0) * TS; ctx.fillStyle = open ? '#2A2F33' : '#C9CED2'; ctx.fillRect(DX + 4, Y, TS - 8, 8); });
+    ctx.restore();
+  }
+  function render() {
+    const sc = scene();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.fillStyle = sc.bg; ctx.fillRect(0, 0, cv.width, cv.height);
+    const W = sc.g[0].length * TS, H = sc.g.length * TS, vwW = vw / zoom, vhW = vh / zoom;
+    const tx = P.px + TS / 2 - vwW / 2, ty = P.py + TS / 2 - vhW / 2;
+    camX = W <= vwW ? (W - vwW) / 2 : Math.max(0, Math.min(W - vwW, tx));
+    camY = H <= vhW ? (H - vhW) / 2 : Math.max(0, Math.min(H - vhW, ty));
+    ctx.setTransform(dpr * zoom, 0, 0, dpr * zoom, -Math.round(camX * zoom * dpr), -Math.round(camY * zoom * dpr));
+    const x0 = Math.max(0, Math.floor(camX / TS)), y0 = Math.max(0, Math.floor(camY / TS));
+    const x1 = Math.min(sc.g[0].length - 1, Math.ceil((camX + vwW) / TS)), y1 = Math.min(sc.g.length - 1, Math.ceil((camY + vhW) / TS));
+    for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) tile(sc, sc.g[y][x], x, y);
+
+    if (sc.id === 'town') {
+      ctx.fillStyle = '#F2C14E'; for (let x = 0; x < sc.g[0].length * TS; x += 22) { const tx2 = Math.floor(x / TS); if (tx2 === 6 || tx2 === 7 || tx2 === 22 || tx2 === 23) continue; ctx.fillRect(x, 11 * TS - 1, 12, 2); }
+      sc.B.forEach(drawBuilding);
+      sc.cars.forEach(drawCar);
+      [[5, 9], [8, 12], [21, 9], [24, 12]].forEach(([x, y]) => drawPedLight(x, y));
+      ctx.fillStyle = '#3F6FB8'; rr(26 * TS + 4, 12 * TS + 4, 24, 6, 2); sign('버스', 26 * TS + 16, 12 * TS + 20, '#3F6FB8', '#fff', 10);
+    }
+    if (sc.id === 'station') {
+      ctx.fillStyle = '#E9C94A'; ctx.fillRect(TS, 10 * TS + 26, 8 * TS, 3); ctx.fillRect(11 * TS, 10 * TS + 26, 8 * TS, 3);
+      drawTrainSide('L'); drawTrainSide('R');
+      sign('← 방화 방면 · 다음 역 신길', 5 * TS, 8 * TS - 6, '#2B2F36', '#F4F5F7', 12);
+      sign('하남검단산·마천 방면 → · 다음 역 여의나루', 15 * TS, 8 * TS - 6, '#2B2F36', '#F4F5F7', 12);
+      sign('개찰구', 10 * TS, 5 * TS + 10, '#3A4F7A', '#fff', 11);
+    }
+    if (sc.id === 'train') {
+      const M = sc.M || { phase: 'stop' };
+      for (let x = 1; x < 21; x++) { const X = x * TS; ctx.fillStyle = '#9FC3D1'; rr(X + 4, 6, TS - 8, 18, 3); if (M.phase === 'run') { ctx.fillStyle = 'rgba(255,255,255,.5)'; const off = (time * 140 + x * 37) % 40; ctx.fillRect(X + 4 + (off % (TS - 10)), 10, 4, 10); } }
+      sign(M.phase === 'stop' ? '이번 역 ' + ['여의나루', '마포', '공덕'][M.i] : '다음 역 ' + ['여의나루', '마포', '공덕'][M.i], 11 * TS, 14, '#22262C', '#FFB347', 12);
+      sign('임산부 배려석', 9 * TS, 2 * TS + 4, '#EFA0BC', '#fff', 10);
+      sign('노약자석', 20 * TS, 5 * TS - 4, '#F0B45A', '#1E2D2A', 10);
+    }
+    (sc.labels || []).forEach(([x, y, t]) => sign(t, x * TS, y * TS - 2, '#FFFDF8', '#586A65', 11));
+    sc.objects.forEach(drawObj);
+
+    const ents = sc.npcs.map(n => ({ e: n, p: false })).concat([{ e: P, p: true }]).sort((a, b) => a.e.py - b.e.py);
+    ents.forEach(o => drawPerson(o.e, o.p));
+    sc.npcs.forEach(n => { if (!n.temp && Math.abs(n.x - P.x) + Math.abs(n.y - P.y) <= 3) nameTag(n); });
+
+    if (sc.id === 'town') sc.B.forEach(b => { const k = { school: 'school', mart: 'mart', station: 'subway', hospital: 'hospital' }[b.id]; if (k && !S.cleared[k]) marker(b.door[0], b.door[1] + (b.top ? -0.2 : 0.6), '#F2C14E'); });
+    if (sc.marker) marker(sc.marker[0], sc.marker[1], '#FF8A3D');
+    const nt = started && !dialogOpen ? nearbyTarget() : null;
+    if (nt) { const [ax, ay] = nt.type === 'npc' ? [nt.ref.px / TS, nt.ref.py / TS] : [nt.ref.x + (nt.ref.w || 1) / 2 - .5, nt.ref.y]; ctx.fillStyle = '#E0A43A'; circ(ax * TS + TS / 2, ay * TS - 24, 8); ctx.fillStyle = '#1E2D2A'; ctx.font = '13px ' + FONT_D; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('!', ax * TS + TS / 2, ay * TS - 23); }
+    if (P.path.length) { const [gx, gy] = P.path[P.path.length - 1]; ctx.strokeStyle = 'rgba(47,125,112,.8)'; ctx.lineWidth = 2; ctx.strokeRect(gx * TS + 4, gy * TS + 4, TS - 8, TS - 8); }
+
+    if (fadeT > 0) { ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.fillStyle = 'rgba(20,28,26,' + Math.min(1, fadeT / 0.35) + ')'; ctx.fillRect(0, 0, cv.width, cv.height); }
+  }
+
+  /* ---------------- input ---------------- */
+  cv.addEventListener('pointerdown', e => {
+    if (!started || dialogOpen || busy) return;
+    const r = cv.getBoundingClientRect();
+    const wx = (e.clientX - r.left) / zoom + camX, wy = (e.clientY - r.top) / zoom + camY;
+    tapTile(Math.floor(wx / TS), Math.floor(wy / TS));
+  });
+  function tapTile(x, y) {
+    const sc = scene();
+    if (!inb(sc, x, y)) return;
+    const n = sc.npcs.find(n => !n.temp && n.talk && Math.round(n.px / TS) === x && Math.round(n.py / TS) === y);
+    if (n) { goInteract({ type: 'npc', ref: n }); return; }
+    const o = objAt(sc, x, y); if (o && o.use) { goInteract({ type: 'obj', ref: o }); return; }
+    if (sc.id === 'town') { const b = sc.B.find(b => x >= b.x && x < b.x + b.w && y >= b.y && y < b.y + b.h); if (b) { goTo(b.door[0], b.door[1]); return; } }
+    if (passable(sc, x, y)) goTo(x, y);
+  }
+  const KEYS = { ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0], w: [0, -1], s: [0, 1], a: [-1, 0], d: [1, 0], W: [0, -1], S: [0, 1], A: [-1, 0], D: [1, 0] };
+  const down = new Set();
+  window.addEventListener('keydown', e => {
+    if (!started || dialogOpen) return;
+    if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
+    if (KEYS[e.key]) { e.preventDefault(); down.add(e.key); held = KEYS[e.key]; }
+    else if (e.key === ' ' || e.key === 'Enter') { if (e.target && e.target.tagName === 'BUTTON' && e.target !== $('actBtn')) return; e.preventDefault(); actNow(); }
+  });
+  window.addEventListener('keyup', e => { down.delete(e.key); if (KEYS[e.key]) { const last = [...down].pop(); held = last ? KEYS[last] : null; } });
+  window.addEventListener('blur', () => { down.clear(); held = null; });
+  $('pad').querySelectorAll('button').forEach(b => {
+    const d = b.dataset.d.split(',').map(Number);
+    b.addEventListener('pointerdown', e => { e.preventDefault(); if (!started || dialogOpen) return; held = d; b.setPointerCapture && b.setPointerCapture(e.pointerId); });
+    ['pointerup', 'pointercancel', 'lostpointercapture'].forEach(ev => b.addEventListener(ev, () => { if (held === d) held = null; }));
+  });
+  $('actBtn').addEventListener('click', actNow);
+  $('hudFold').addEventListener('click', () => { const h = $('hud'); h.classList.toggle('min'); $('hudFold').textContent = h.classList.contains('min') ? '펼치기' : '접기'; });
+  $('calmBtn').addEventListener('click', () => { S.calm = !S.calm; save(); refresh(); });
+
+  const CHIPS = [['school', '학교', 'school'], ['mart', '마트', 'mart'], ['station', '지하철역', 'subway'], ['hospital', '병원', 'hospital'], ['pharmacy', '약국', null], ['shop', '루비 상점', null], ['home', '우리 집', null]];
+  function renderChips() {
+    $('chips').innerHTML = '<span>바로 가기</span>' + CHIPS.map(([id, name, k]) => '<button class="chip' + (k && S.cleared[k] ? ' done' : '') + '" data-id="' + id + '" type="button">' + (k && S.cleared[k] ? '✓ ' : '') + name + '</button>').join('');
+  }
+  $('chips').addEventListener('click', e => {
+    const b = e.target.closest('.chip'); if (!b || !started || dialogOpen || busy) return;
+    gameEl.scrollIntoView({ behavior: S.calm ? 'auto' : 'smooth', block: 'center' });
+    if (cur !== 'town') {
+      const sc = scene(); const ex = sc.doors[0];
+      if (!ex) { toast('지금은 열차 안이에요. 공덕역에서 내리면 동네로 돌아가요.'); return; }
+      toast('먼저 건물 밖으로 나가요.'); goTo(ex.x, ex.y); return;
+    }
+    const bd = SC.town.B.find(x => x.id === b.dataset.id); if (bd) goTo(bd.door[0], bd.door[1]);
+  });
+
+  $('startBtn').addEventListener('click', () => {
+    $('start').hidden = true; started = true;
+    setScene('town', 11, 5);
+    if (!S.intro) run(async () => {
+      S.intro = true; save();
+      await talk('안내', '한걸음 타운에 온 걸 환영해요! 여기는 실제 동네처럼 꾸민 마을이에요.');
+      await talk('안내', '가고 싶은 곳을 화면에서 누르면 그곳까지 걸어가요. 사람이나 물건 옆에서 말하기를 누르면 대화할 수 있어요.');
+      await talk('안내', '노란 화살표가 있는 건물에 미션이 있어요. 큰길은 횡단보도에서 초록불일 때 건너요!');
+    });
+  });
+
+  window.__ht = { get scene() { return cur; }, get pos() { return [P.x, P.y]; }, get busy() { return busy || dialogOpen || P.moving || P.path.length > 0; }, goTo, tap: tapTile, S, TR, HM: () => HM };
+
+  /* ---------------- boot ---------------- */
+  resize(); window.addEventListener('resize', resize);
+  if (window.ResizeObserver) new ResizeObserver(resize).observe(gameEl);
+  refresh(); townGoal();
+  let last = performance.now();
+  function loop(now) { const dt = Math.min(0.05, (now - last) / 1000); last = now; try { update(dt); render(); } catch (err) { console.error(err); } requestAnimationFrame(loop); }
+  requestAnimationFrame(loop);
+})();
+</script>
+
+</body></html>
